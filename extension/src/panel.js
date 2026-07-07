@@ -277,7 +277,7 @@ function renderPanelHtml(nonce) {
     const table = el('table');
     const thead = el('thead');
     const headRow = el('tr');
-    ['Time', 'Context %', '5h %', '7d %'].forEach((h) => {
+    ['Time', 'Session', 'Context %', '5h %', '7d %'].forEach((h) => {
       const th = el('th'); th.textContent = h; headRow.appendChild(th);
     });
     thead.appendChild(headRow);
@@ -288,6 +288,7 @@ function renderPanelHtml(nonce) {
       const row = el('tr');
       const cells = [
         formatTime(entry.ts),
+        entry.dir || (entry.sessionId ? entry.sessionId.slice(0, 8) : '--'),
         entry.contextUsedPct != null ? Math.round(entry.contextUsedPct) + '%' : '--',
         entry.fiveHourPct != null ? Math.round(entry.fiveHourPct) + '%' : '--',
         entry.sevenDayPct != null ? Math.round(entry.sevenDayPct) + '%' : '--',
@@ -322,10 +323,36 @@ function renderPanelHtml(nonce) {
 
     const latest = history[history.length - 1];
 
-    const contextSeries = history
-      .filter((e) => e.sessionId === latest.sessionId && typeof e.contextUsedPct === 'number')
-      .map((e) => ({ ts: e.ts, pct: e.contextUsedPct }));
-    renderChart(app, contextSeries, { title: 'Context window (this session)' });
+    // Context is per-session (never summed across sessions), but with more
+    // than one Claude Code window open concurrently, "the latest sample"
+    // can flip between them. Show every session active in the last two
+    // hours as its own chart, labeled by directory, so it's unambiguous
+    // which one you're looking at.
+    const RECENT_SESSION_WINDOW_MS = 2 * 60 * 60 * 1000;
+    const MAX_SESSION_CHARTS = 4;
+
+    const bySession = new Map();
+    for (const e of history) {
+      if (typeof e.contextUsedPct !== 'number') continue;
+      const existing = bySession.get(e.sessionId);
+      if (!existing || e.ts > existing.lastTs) {
+        bySession.set(e.sessionId, { sessionId: e.sessionId, lastTs: e.ts, dir: e.dir || existing?.dir });
+      } else if (!existing.dir && e.dir) {
+        existing.dir = e.dir;
+      }
+    }
+    const allSessions = Array.from(bySession.values()).sort((a, b) => b.lastTs - a.lastTs);
+    const nowMs = Date.now();
+    const recentSessions = allSessions.filter((s) => nowMs - s.lastTs < RECENT_SESSION_WINDOW_MS);
+    const sessionsToShow = (recentSessions.length > 0 ? recentSessions : allSessions.slice(0, 1)).slice(0, MAX_SESSION_CHARTS);
+
+    sessionsToShow.forEach((s) => {
+      const series = history
+        .filter((e) => e.sessionId === s.sessionId && typeof e.contextUsedPct === 'number')
+        .map((e) => ({ ts: e.ts, pct: e.contextUsedPct }));
+      const label = s.dir || s.sessionId.slice(0, 8);
+      renderChart(app, series, { title: 'Context window — ' + label });
+    });
 
     if (latest.fiveHourResetsAt != null) {
       const fiveHourSeries = history
