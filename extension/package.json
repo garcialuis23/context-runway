@@ -1,0 +1,26 @@
+{
+  "name": "context-runway",
+  "displayName": "Context Runway",
+  "description": "See your Claude Code context window runway and account rate-limit burn-rate at a glance in VS Code.",
+  "version": "0.1.0",
+  "publisher": "context-runway",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "context-runway.showPanel",
+        "title": "Context Runway: Show Usage Panel"
+      }
+    ]
+  },
+  "scripts": {
+    "package": "npx --yes @vscode/vsce package"
+  },
+  "license": "MIT"
+}
