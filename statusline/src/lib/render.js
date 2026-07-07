@@ -40,4 +40,13 @@ function formatDuration(ms) {
   return `${mins}m`;
 }
 
-module.exports = { COLORS, colorForPct, renderBar, formatDuration };
+// One aligned "label [bar] pct%  extra" row, for a dashboard-style layout
+// where ctx/5h/7d each get their own line with matching column widths.
+function formatRow(label, pct, extra, warn) {
+  const labelStr = label.padEnd(4);
+  const pctStr = `${Math.round(pct)}%`.padStart(4);
+  const warnStr = warn ? ' ⚠' : '';
+  return `${COLORS.dim}${labelStr}${COLORS.reset}${renderBar(pct)} ${COLORS.bold}${pctStr}${COLORS.reset}  ${COLORS.dim}${extra || ''}${COLORS.reset}${warnStr}`;
+}
+
+module.exports = { COLORS, colorForPct, renderBar, formatRow, formatDuration };

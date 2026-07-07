@@ -3,7 +3,11 @@
 
 const { appendSnapshot } = require('./lib/history');
 const { projectWindow } = require('./lib/projection');
-const { COLORS, renderBar, formatDuration } = require('./lib/render');
+const { COLORS, formatRow, formatDuration } = require('./lib/render');
+
+const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_SESSION_LABEL_LEN = 40;
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -37,7 +41,7 @@ function averageTurnDelta(history, sessionId) {
   return recent.reduce((a, b) => a + b, 0) / recent.length;
 }
 
-function renderRateLimitSegment(label, pct, resetsAt, history, pctKey, resetsAtKey, nowMs) {
+function renderRateLimitRow(label, pct, resetsAt, history, pctKey, resetsAtKey, nowMs, windowDurationMs) {
   if (pct == null) return null;
   const proj = projectWindow(history, {
     pctKey,
@@ -45,10 +49,9 @@ function renderRateLimitSegment(label, pct, resetsAt, history, pctKey, resetsAtK
     currentPct: pct,
     currentResetsAt: resetsAt,
     nowMs,
+    windowDurationMs,
   });
-  const warn = proj?.willExceedBeforeReset ? ' ⚠' : '';
-  const resetStr = formatDuration(proj?.msToReset);
-  return `${label} ${renderBar(pct, 8)} ${COLORS.bold}${pct.toFixed(0)}%${COLORS.reset} (resets ${resetStr})${warn}`;
+  return formatRow(label, pct, `resets in ${formatDuration(proj?.msToReset)}`, proj?.willExceedBeforeReset);
 }
 
 async function main() {
@@ -107,10 +110,16 @@ async function main() {
   const hasOtherRecentSession = history.some(
     (e) => e.sessionId !== sessionId && now - e.ts < OTHER_SESSION_WINDOW_MS
   );
+  const truncatedLabel =
+    sessionLabel.length > MAX_SESSION_LABEL_LEN
+      ? `${sessionLabel.slice(0, MAX_SESSION_LABEL_LEN - 1)}…`
+      : sessionLabel;
   const header = hasOtherRecentSession
-    ? `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}${sessionLabel}${COLORS.reset}`
+    ? `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}· ${truncatedLabel}${COLORS.reset}`
     : `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir}`;
   lines.push(header);
+
+  const rows = [];
 
   if (contextUsedPct != null) {
     const remainingTokens =
@@ -121,17 +130,19 @@ async function main() {
     const turnsLeft =
       avgDelta && remainingTokens != null ? Math.max(0, Math.floor(remainingTokens / avgDelta)) : null;
 
-    let line = `${renderBar(contextUsedPct)} ${COLORS.bold}${contextUsedPct.toFixed(0)}%${COLORS.reset} ctx`;
-    if (turnsLeft != null) line += ` ${COLORS.dim}(~${turnsLeft} turns left)${COLORS.reset}`;
-    lines.push(line);
+    rows.push(formatRow('ctx', contextUsedPct, turnsLeft != null ? `~${turnsLeft} turns left` : ''));
   }
 
-  const rlParts = [
-    renderRateLimitSegment('5h', fiveHourPct, fiveHourResetsAt, history, 'fiveHourPct', 'fiveHourResetsAt', now),
-    renderRateLimitSegment('7d', sevenDayPct, sevenDayResetsAt, history, 'sevenDayPct', 'sevenDayResetsAt', now),
-  ].filter(Boolean);
+  rows.push(
+    renderRateLimitRow('5h', fiveHourPct, fiveHourResetsAt, history, 'fiveHourPct', 'fiveHourResetsAt', now, FIVE_HOUR_MS),
+    renderRateLimitRow('7d', sevenDayPct, sevenDayResetsAt, history, 'sevenDayPct', 'sevenDayResetsAt', now, SEVEN_DAY_MS)
+  );
 
-  if (rlParts.length > 0) lines.push(rlParts.join(`  ${COLORS.dim}|${COLORS.reset}  `));
+  const filledRows = rows.filter(Boolean);
+  if (filledRows.length > 0) {
+    lines.push('');
+    lines.push(...filledRows);
+  }
 
   process.stdout.write(lines.join('\n') + '\n');
 }
