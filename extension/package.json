@@ -4,7 +4,7 @@
   "description": "See your Claude Code context window runway and account rate-limit burn-rate at a glance in VS Code.",
   "version": "0.1.0",
   "publisher": "context-runway",
-  "private": true,
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -14,6 +14,11 @@
     "directory": "extension"
   },
   "categories": ["Other"],
+  "keywords": ["claude", "claude code", "context window", "rate limit", "usage", "anthropic"],
+  "galleryBanner": {
+    "color": "#1a1a19",
+    "theme": "dark"
+  },
   "activationEvents": ["onStartupFinished"],
   "main": "./src/extension.js",
   "contributes": {
