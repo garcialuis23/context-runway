@@ -3,11 +3,21 @@
 
 const { appendSnapshot } = require('./lib/history');
 const { projectWindow } = require('./lib/projection');
-const { COLORS, formatRow, formatDuration } = require('./lib/render');
+const { COLORS, formatRow, formatTokenCount, formatDuration } = require('./lib/render');
 
 const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
 const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_SESSION_LABEL_LEN = 40;
+
+// A drop of at least this fraction of the context window counts as a
+// compaction rather than normal noise (normal usage only grows).
+const COMPACTION_DROP_FRACTION = 0.2;
+// If usage was already this high right before the drop, it's almost
+// certainly Claude Code's automatic compaction (triggered by running out
+// of room) rather than a manual /compact or /clear.
+const AUTO_COMPACTION_PRIOR_PCT = 85;
+// How long to keep showing a compaction after it happened.
+const COMPACTION_VISIBLE_MS = 15 * 60 * 1000;
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -39,6 +49,36 @@ function averageTurnDelta(history, sessionId) {
 
   const recent = deltas.slice(-10);
   return recent.reduce((a, b) => a + b, 0) / recent.length;
+}
+
+// Finds the most recent large drop in context tokens for this session
+// (normal usage only grows, so a big drop means a compaction happened),
+// as long as it's still within COMPACTION_VISIBLE_MS.
+function detectRecentCompaction(history, sessionId, contextWindowSize, nowMs) {
+  if (contextWindowSize == null) return null;
+
+  const points = history
+    .filter((e) => e.sessionId === sessionId && typeof e.contextTokens === 'number')
+    .sort((a, b) => a.ts - b.ts);
+
+  let lastDrop = null;
+  for (let i = 1; i < points.length; i++) {
+    const drop = points[i - 1].contextTokens - points[i].contextTokens;
+    if (drop >= contextWindowSize * COMPACTION_DROP_FRACTION) {
+      lastDrop = { ts: points[i].ts, priorPct: points[i - 1].contextUsedPct };
+    }
+  }
+  if (!lastDrop || nowMs - lastDrop.ts > COMPACTION_VISIBLE_MS) return null;
+
+  return {
+    ts: lastDrop.ts,
+    auto: typeof lastDrop.priorPct === 'number' && lastDrop.priorPct >= AUTO_COMPACTION_PRIOR_PCT,
+  };
+}
+
+function formatAgo(ms) {
+  if (ms < 60 * 1000) return 'just now';
+  return `${formatDuration(ms)} ago`;
 }
 
 function renderRateLimitRow(label, pct, resetsAt, history, pctKey, resetsAtKey, nowMs, windowDurationMs) {
@@ -81,6 +121,8 @@ async function main() {
   const sevenDayPct = rl.seven_day?.used_percentage ?? null;
   const sevenDayResetsAt = rl.seven_day?.resets_at ?? null;
 
+  const effortLevel = input.effort?.level || null;
+
   const sessionId = input.session_id || 'unknown';
   const sessionName = input.session_name || null;
   // Falls back to a short id fragment so concurrent sessions in the same
@@ -92,6 +134,8 @@ async function main() {
     sessionId,
     sessionName,
     dir,
+    model,
+    effortLevel,
     contextUsedPct,
     contextTokens,
     contextWindowSize,
@@ -102,6 +146,13 @@ async function main() {
   });
 
   const lines = [];
+
+  // Model + its context window size up front, so two chats on different
+  // models (different context limits) are easy to tell apart at a glance.
+  const modelMeta = [contextWindowSize != null ? formatTokenCount(contextWindowSize) : null, effortLevel]
+    .filter(Boolean)
+    .join(' · ');
+  const modelLabel = modelMeta ? `${model} · ${modelMeta}` : model;
 
   // Only show the session label when there's actually another session
   // active recently — otherwise it's just noise in the common case of one
@@ -115,8 +166,8 @@ async function main() {
       ? `${sessionLabel.slice(0, MAX_SESSION_LABEL_LEN - 1)}…`
       : sessionLabel;
   const header = hasOtherRecentSession
-    ? `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}· ${truncatedLabel}${COLORS.reset}`
-    : `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir}`;
+    ? `${COLORS.cyan}[${modelLabel}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}· ${truncatedLabel}${COLORS.reset}`
+    : `${COLORS.cyan}[${modelLabel}]${COLORS.reset} 📁 ${dir}`;
   lines.push(header);
 
   const rows = [];
@@ -137,6 +188,12 @@ async function main() {
     renderRateLimitRow('5h', fiveHourPct, fiveHourResetsAt, history, 'fiveHourPct', 'fiveHourResetsAt', now, FIVE_HOUR_MS),
     renderRateLimitRow('7d', sevenDayPct, sevenDayResetsAt, history, 'sevenDayPct', 'sevenDayResetsAt', now, SEVEN_DAY_MS)
   );
+
+  const compaction = detectRecentCompaction(history, sessionId, contextWindowSize, now);
+  if (compaction) {
+    const label = compaction.auto ? 'auto-compacted' : 'compacted';
+    rows.push(`${COLORS.dim}🗜  ${label} ${formatAgo(now - compaction.ts)} (context was reset)${COLORS.reset}`);
+  }
 
   const filledRows = rows.filter(Boolean);
   if (filledRows.length > 0) {

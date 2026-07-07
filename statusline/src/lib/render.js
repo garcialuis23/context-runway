@@ -28,6 +28,18 @@ function renderBar(pct, width = 10) {
   return `[${color}${'#'.repeat(filled)}${COLORS.reset}${COLORS.dim}${'-'.repeat(empty)}${COLORS.reset}]`;
 }
 
+// Renders a token count as a compact "200K" / "1M" string, so two chats on
+// different models (different context window sizes) are easy to compare.
+function formatTokenCount(n) {
+  if (n == null) return '?';
+  if (n >= 1_000_000) {
+    const millions = n / 1_000_000;
+    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
+
 // Renders a millisecond duration as a compact "1d2h" / "3h14m" / "5m" string.
 function formatDuration(ms) {
   if (ms == null || !isFinite(ms) || ms < 0) return '--';
@@ -49,4 +61,4 @@ function formatRow(label, pct, extra, warn) {
   return `${COLORS.dim}${labelStr}${COLORS.reset}${renderBar(pct)} ${COLORS.bold}${pctStr}${COLORS.reset}  ${COLORS.dim}${extra || ''}${COLORS.reset}${warnStr}`;
 }
 
-module.exports = { COLORS, colorForPct, renderBar, formatRow, formatDuration };
+module.exports = { COLORS, colorForPct, renderBar, formatRow, formatTokenCount, formatDuration };
