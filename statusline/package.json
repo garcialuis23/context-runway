@@ -9,7 +9,7 @@
   },
   "scripts": {
     "install-statusline": "node src/install.js",
-    "test": "echo '{\"model\":{\"display_name\":\"Sonnet\"},\"workspace\":{\"current_dir\":\"/home/user/project\"},\"session_id\":\"test-session\",\"context_window\":{\"used_percentage\":42,\"total_input_tokens\":80000,\"total_output_tokens\":4000,\"context_window_size\":200000},\"rate_limits\":{\"five_hour\":{\"used_percentage\":23.5,\"resets_at\":9999999999},\"seven_day\":{\"used_percentage\":41.2,\"resets_at\":9999999999}}}' | node src/index.js"
+    "test": "node src/index.js < test/fixture.json"
   },
   "license": "MIT"
 }
