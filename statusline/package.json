@@ -10,7 +10,7 @@
   "scripts": {
     "install-statusline": "node src/install.js",
     "uninstall-statusline": "node src/uninstall.js",
-    "test": "node src/index.js < test/fixture.json"
+    "test": "node test/run.js"
   },
   "license": "MIT"
 }

@@ -4,7 +4,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const STATE_DIR = path.join(os.homedir(), '.claude', 'context-runway');
+// Overridable so tests (see test/run.js) never write to the user's real
+// history file.
+const STATE_DIR = process.env.CONTEXT_RUNWAY_STATE_DIR || path.join(os.homedir(), '.claude', 'context-runway');
 const HISTORY_FILE = path.join(STATE_DIR, 'usage-history.jsonl');
 
 // Covers the 7-day rate-limit window with a couple of days of buffer.
