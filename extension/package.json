@@ -8,6 +8,11 @@
   "engines": {
     "vscode": "^1.85.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/garcialuis23/context-runway.git",
+    "directory": "extension"
+  },
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],
   "main": "./src/extension.js",

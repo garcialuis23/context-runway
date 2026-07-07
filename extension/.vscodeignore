@@ -1,0 +1,3 @@
+.vscodeignore
+**/*.tmp.js
+.gitignore
