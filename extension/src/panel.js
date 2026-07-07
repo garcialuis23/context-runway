@@ -132,6 +132,15 @@ function renderPanelHtml(nonce) {
     return m + 'm';
   }
 
+  // Same fallback order as statusline/src/index.js: a /rename'd session_name
+  // is the clearest label; otherwise fall back to directory + a short id
+  // fragment, since two chats in the same project both show the same dir.
+  function sessionLabel(entry) {
+    if (entry.sessionName) return entry.sessionName;
+    const shortId = entry.sessionId ? entry.sessionId.slice(0, 6) : '??????';
+    return entry.dir ? entry.dir + ' · #' + shortId : '#' + shortId;
+  }
+
   function el(tag, attrs, ns) {
     const node = ns ? document.createElementNS(ns, tag) : document.createElement(tag);
     for (const k in attrs || {}) node.setAttribute(k, attrs[k]);
@@ -288,7 +297,7 @@ function renderPanelHtml(nonce) {
       const row = el('tr');
       const cells = [
         formatTime(entry.ts),
-        entry.dir || (entry.sessionId ? entry.sessionId.slice(0, 8) : '--'),
+        sessionLabel(entry),
         entry.contextUsedPct != null ? Math.round(entry.contextUsedPct) + '%' : '--',
         entry.fiveHourPct != null ? Math.round(entry.fiveHourPct) + '%' : '--',
         entry.sevenDayPct != null ? Math.round(entry.sevenDayPct) + '%' : '--',
@@ -336,9 +345,15 @@ function renderPanelHtml(nonce) {
       if (typeof e.contextUsedPct !== 'number') continue;
       const existing = bySession.get(e.sessionId);
       if (!existing || e.ts > existing.lastTs) {
-        bySession.set(e.sessionId, { sessionId: e.sessionId, lastTs: e.ts, dir: e.dir || existing?.dir });
-      } else if (!existing.dir && e.dir) {
-        existing.dir = e.dir;
+        bySession.set(e.sessionId, {
+          sessionId: e.sessionId,
+          lastTs: e.ts,
+          dir: e.dir || existing?.dir,
+          sessionName: e.sessionName || existing?.sessionName,
+        });
+      } else {
+        if (!existing.dir && e.dir) existing.dir = e.dir;
+        if (!existing.sessionName && e.sessionName) existing.sessionName = e.sessionName;
       }
     }
     const allSessions = Array.from(bySession.values()).sort((a, b) => b.lastTs - a.lastTs);
@@ -350,7 +365,7 @@ function renderPanelHtml(nonce) {
       const series = history
         .filter((e) => e.sessionId === s.sessionId && typeof e.contextUsedPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.contextUsedPct }));
-      const label = s.dir || s.sessionId.slice(0, 8);
+      const label = sessionLabel(s);
       renderChart(app, series, { title: 'Context window — ' + label });
     });
 

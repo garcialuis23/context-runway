@@ -79,10 +79,15 @@ async function main() {
   const sevenDayResetsAt = rl.seven_day?.resets_at ?? null;
 
   const sessionId = input.session_id || 'unknown';
+  const sessionName = input.session_name || null;
+  // Falls back to a short id fragment so concurrent sessions in the same
+  // project (same `dir`) are still distinguishable before you /rename them.
+  const sessionLabel = sessionName || `#${sessionId.slice(0, 6)}`;
 
   const history = appendSnapshot({
     ts: now,
     sessionId,
+    sessionName,
     dir,
     contextUsedPct,
     contextTokens,
@@ -95,7 +100,7 @@ async function main() {
 
   const lines = [];
 
-  lines.push(`${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir}`);
+  lines.push(`${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}${sessionLabel}${COLORS.reset}`);
 
   if (contextUsedPct != null) {
     const remainingTokens =
