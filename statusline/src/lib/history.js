@@ -42,21 +42,41 @@ function writeHistory(entries) {
   fs.writeFileSync(HISTORY_FILE, entries.map((e) => JSON.stringify(e)).join('\n') + '\n');
 }
 
+// Chance per call (once stale entries exist) of doing a full prune-and-rewrite.
+// Kept low because every full rewrite is a read-modify-write race if another
+// concurrent Claude Code session appends in between; appendFileSync below is
+// the safe common path.
+const PRUNE_CHANCE = 0.05;
+
 // Appends a snapshot (subject to throttling) and returns the resulting
 // in-memory history, pruned of anything older than MAX_AGE_MS.
+//
+// This is append-only on the common path (fs.appendFileSync, safe even with
+// multiple concurrent Claude Code sessions writing at once — unlike a full
+// read-modify-write, which can silently drop another session's sample if two
+// processes write around the same time). Pruning old entries requires a full
+// rewrite, so it only happens occasionally, once stale entries actually exist.
 function appendSnapshot(snapshot) {
-  const kept = readHistory().filter((entry) => snapshot.ts - entry.ts < MAX_AGE_MS);
-
-  const last = kept[kept.length - 1];
+  const existing = readHistory();
+  const last = existing[existing.length - 1];
   const shouldThrottle =
     last && last.sessionId === snapshot.sessionId && snapshot.ts - last.ts < MIN_SAMPLE_INTERVAL_MS;
 
   if (shouldThrottle) {
-    return kept;
+    return existing;
   }
 
-  kept.push(snapshot);
-  writeHistory(kept);
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.appendFileSync(HISTORY_FILE, JSON.stringify(snapshot) + '\n');
+  const kept = existing.concat([snapshot]);
+
+  const hasStale = kept.some((entry) => snapshot.ts - entry.ts >= MAX_AGE_MS);
+  if (hasStale && Math.random() < PRUNE_CHANCE) {
+    const pruned = kept.filter((entry) => snapshot.ts - entry.ts < MAX_AGE_MS);
+    writeHistory(pruned);
+    return pruned;
+  }
+
   return kept;
 }
 
