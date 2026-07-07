@@ -21,3 +21,9 @@ code --install-extension context-runway-0.1.0.vsix
 ```
 
 See [`statusline/README.md`](statusline/README.md) and [`extension/README.md`](extension/README.md) for details.
+
+## Contributing
+
+Contributions are welcome via pull request — see [CONTRIBUTING.md](CONTRIBUTING.md).
+`main` is protected, so all changes (including the maintainer's) go through review.
+Found a security issue? See [SECURITY.md](SECURITY.md) instead of opening a public issue.
