@@ -6,6 +6,7 @@ const COLORS = {
   red: '\x1b[31m',
   cyan: '\x1b[36m',
   dim: '\x1b[2m',
+  bold: '\x1b[1m',
   reset: '\x1b[0m',
 };
 
@@ -15,10 +16,16 @@ function colorForPct(pct) {
   return COLORS.green;
 }
 
-function bar(pct, width = 10, fillChar = '▓', emptyChar = '░') {
+// ASCII bar rather than unicode shade blocks (▓/░): those blur into a single
+// gray blob at the small font sizes some status line hosts use, while
+// '#'/'-' stay legible everywhere. Only the filled run carries color, so the
+// proportion still reads even if a host strips ANSI entirely.
+function renderBar(pct, width = 10) {
   const clamped = Math.max(0, Math.min(100, pct));
   const filled = Math.round((clamped / 100) * width);
-  return fillChar.repeat(filled) + emptyChar.repeat(width - filled);
+  const empty = width - filled;
+  const color = colorForPct(clamped);
+  return `[${color}${'#'.repeat(filled)}${COLORS.reset}${COLORS.dim}${'-'.repeat(empty)}${COLORS.reset}]`;
 }
 
 // Renders a millisecond duration as a compact "1d2h" / "3h14m" / "5m" string.
@@ -33,4 +40,4 @@ function formatDuration(ms) {
   return `${mins}m`;
 }
 
-module.exports = { COLORS, colorForPct, bar, formatDuration };
+module.exports = { COLORS, colorForPct, renderBar, formatDuration };

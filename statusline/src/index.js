@@ -3,7 +3,7 @@
 
 const { appendSnapshot } = require('./lib/history');
 const { projectWindow } = require('./lib/projection');
-const { COLORS, colorForPct, bar, formatDuration } = require('./lib/render');
+const { COLORS, renderBar, formatDuration } = require('./lib/render');
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -46,10 +46,9 @@ function renderRateLimitSegment(label, pct, resetsAt, history, pctKey, resetsAtK
     currentResetsAt: resetsAt,
     nowMs,
   });
-  const color = colorForPct(pct);
   const warn = proj?.willExceedBeforeReset ? ' ⚠' : '';
   const resetStr = formatDuration(proj?.msToReset);
-  return `${label} ${color}${bar(pct, 8)}${COLORS.reset} ${pct.toFixed(0)}% (resets ${resetStr})${warn}`;
+  return `${label} ${renderBar(pct, 8)} ${COLORS.bold}${pct.toFixed(0)}%${COLORS.reset} (resets ${resetStr})${warn}`;
 }
 
 async function main() {
@@ -84,6 +83,7 @@ async function main() {
   const history = appendSnapshot({
     ts: now,
     sessionId,
+    dir,
     contextUsedPct,
     contextTokens,
     contextWindowSize,
@@ -98,7 +98,6 @@ async function main() {
   lines.push(`${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir}`);
 
   if (contextUsedPct != null) {
-    const color = colorForPct(contextUsedPct);
     const remainingTokens =
       contextWindowSize != null && contextTokens != null
         ? Math.max(0, contextWindowSize - contextTokens)
@@ -107,7 +106,7 @@ async function main() {
     const turnsLeft =
       avgDelta && remainingTokens != null ? Math.max(0, Math.floor(remainingTokens / avgDelta)) : null;
 
-    let line = `${color}${bar(contextUsedPct)}${COLORS.reset} ${contextUsedPct.toFixed(0)}% ctx`;
+    let line = `${renderBar(contextUsedPct)} ${COLORS.bold}${contextUsedPct.toFixed(0)}%${COLORS.reset} ctx`;
     if (turnsLeft != null) line += ` ${COLORS.dim}(~${turnsLeft} turns left)${COLORS.reset}`;
     lines.push(line);
   }
