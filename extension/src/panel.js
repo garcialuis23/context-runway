@@ -64,6 +64,7 @@ function renderPanelHtml(nonce) {
   .card-title { font-size: 13px; color: var(--text-secondary); }
   .card-value { font-size: 22px; font-weight: 600; }
   .card-sub { font-size: 12px; color: var(--text-muted); }
+  .card-meta { font-size: 11px; color: var(--text-muted); margin: -2px 0 8px; }
 
   .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 1px 6px; border-radius: 10px; font-weight: 600; }
   .status-good { color: var(--good); }
@@ -132,6 +133,47 @@ function renderPanelHtml(nonce) {
     return m + 'm';
   }
 
+  function formatAgo(ms) {
+    if (ms < 60 * 1000) return 'just now';
+    return formatDuration(ms) + ' ago';
+  }
+
+  // Same fallback order as statusline/src/index.js.
+  function formatTokenCount(n) {
+    if (n == null) return null;
+    if (n >= 1000000) {
+      const millions = n / 1000000;
+      return (Number.isInteger(millions) ? millions : millions.toFixed(1)) + 'M';
+    }
+    if (n >= 1000) return Math.round(n / 1000) + 'K';
+    return String(n);
+  }
+
+  // Same heuristic as statusline/src/index.js: a big drop in context tokens
+  // (normal usage only grows) means a compaction happened; if usage was
+  // already near the ceiling right before, it's almost certainly Claude
+  // Code's automatic compaction rather than a manual /compact or /clear.
+  const COMPACTION_DROP_FRACTION = 0.2;
+  const AUTO_COMPACTION_PRIOR_PCT = 85;
+  const COMPACTION_VISIBLE_MS = 15 * 60 * 1000;
+
+  function detectRecentCompaction(history, sessionId, contextWindowSize, nowMs) {
+    if (contextWindowSize == null) return null;
+    const points = history
+      .filter((e) => e.sessionId === sessionId && typeof e.contextTokens === 'number')
+      .sort((a, b) => a.ts - b.ts);
+
+    let lastDrop = null;
+    for (let i = 1; i < points.length; i++) {
+      const drop = points[i - 1].contextTokens - points[i].contextTokens;
+      if (drop >= contextWindowSize * COMPACTION_DROP_FRACTION) {
+        lastDrop = { ts: points[i].ts, priorPct: points[i - 1].contextUsedPct };
+      }
+    }
+    if (!lastDrop || nowMs - lastDrop.ts > COMPACTION_VISIBLE_MS) return null;
+    return { ts: lastDrop.ts, auto: typeof lastDrop.priorPct === 'number' && lastDrop.priorPct >= AUTO_COMPACTION_PRIOR_PCT };
+  }
+
   // Same fallback order as statusline/src/index.js: a /rename'd session_name
   // is the clearest label; otherwise fall back to directory + a short id
   // fragment, since two chats in the same project both show the same dir.
@@ -178,6 +220,12 @@ function renderPanelHtml(nonce) {
       head.appendChild(sub);
     }
     card.appendChild(head);
+
+    if (opts.meta) {
+      const meta = el('div', { class: 'card-meta' });
+      meta.textContent = opts.meta;
+      card.appendChild(meta);
+    }
 
     if (points.length < 2) {
       const empty = el('div', { class: 'card-sub' });
@@ -354,10 +402,16 @@ function renderPanelHtml(nonce) {
           lastTs: e.ts,
           dir: e.dir || existing?.dir,
           sessionName: e.sessionName || existing?.sessionName,
+          model: e.model || existing?.model,
+          effortLevel: e.effortLevel || existing?.effortLevel,
+          contextWindowSize: e.contextWindowSize || existing?.contextWindowSize,
         });
       } else {
         if (!existing.dir && e.dir) existing.dir = e.dir;
         if (!existing.sessionName && e.sessionName) existing.sessionName = e.sessionName;
+        if (!existing.model && e.model) existing.model = e.model;
+        if (!existing.effortLevel && e.effortLevel) existing.effortLevel = e.effortLevel;
+        if (!existing.contextWindowSize && e.contextWindowSize) existing.contextWindowSize = e.contextWindowSize;
       }
     }
     const allSessions = Array.from(bySession.values()).sort((a, b) => b.lastTs - a.lastTs);
@@ -374,7 +428,28 @@ function renderPanelHtml(nonce) {
       const series = history
         .filter((e) => e.sessionId === currentSession.sessionId && typeof e.contextUsedPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.contextUsedPct }));
-      renderChart(app, series, { title: 'Context window — this chat', subtitle: sessionLabel(currentSession) });
+
+      const metaParts = [
+        currentSession.model,
+        formatTokenCount(currentSession.contextWindowSize),
+        currentSession.effortLevel,
+      ].filter(Boolean);
+
+      const compaction = detectRecentCompaction(
+        history,
+        currentSession.sessionId,
+        currentSession.contextWindowSize,
+        Date.now()
+      );
+      if (compaction) {
+        metaParts.push('🗜 ' + (compaction.auto ? 'auto-compacted' : 'compacted') + ' ' + formatAgo(Date.now() - compaction.ts));
+      }
+
+      renderChart(app, series, {
+        title: 'Context window — this chat',
+        subtitle: sessionLabel(currentSession),
+        meta: metaParts.join(' · '),
+      });
     }
 
     const fiveHourEntry = mostRecentWithField(history, 'fiveHourPct');

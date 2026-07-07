@@ -3,7 +3,14 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { readHistory, mostRecentWithField, sessionLabel, HISTORY_FILE, STATE_DIR } = require('./historyReader');
+const {
+  readHistory,
+  mostRecentWithField,
+  sessionLabel,
+  formatTokenCount,
+  HISTORY_FILE,
+  STATE_DIR,
+} = require('./historyReader');
 const { renderPanelHtml, getNonce } = require('./panel');
 
 let statusBarItem;
@@ -68,9 +75,14 @@ function refresh() {
   );
 
   statusBarItem.text = `$(pulse) ${parts.length ? parts.join(' · ') : 'context-runway'}`;
-  statusBarItem.tooltip = ctxEntry
-    ? `Context: ${sessionLabel(ctxEntry)}\nClick for context & rate-limit history — Context Runway`
-    : 'Click for context & rate-limit history — Context Runway';
+  if (ctxEntry) {
+    const modelMeta = [ctxEntry.model, formatTokenCount(ctxEntry.contextWindowSize), ctxEntry.effortLevel]
+      .filter(Boolean)
+      .join(' · ');
+    statusBarItem.tooltip = `${sessionLabel(ctxEntry)}${modelMeta ? ` (${modelMeta})` : ''}\nClick for context & rate-limit history — Context Runway`;
+  } else {
+    statusBarItem.tooltip = 'Click for context & rate-limit history — Context Runway';
+  }
   statusBarItem.backgroundColor = backgroundForPct(worstPct);
   statusBarItem.show();
 

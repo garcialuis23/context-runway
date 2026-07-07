@@ -53,4 +53,15 @@ function sessionLabel(entry) {
   return entry.dir ? `${entry.dir} · #${shortId}` : `#${shortId}`;
 }
 
-module.exports = { readHistory, mostRecentWithField, sessionLabel, HISTORY_FILE, STATE_DIR };
+// Same fallback order as statusline/src/lib/render.js.
+function formatTokenCount(n) {
+  if (n == null) return null;
+  if (n >= 1_000_000) {
+    const millions = n / 1_000_000;
+    return `${Number.isInteger(millions) ? millions : millions.toFixed(1)}M`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
+
+module.exports = { readHistory, mostRecentWithField, sessionLabel, formatTokenCount, HISTORY_FILE, STATE_DIR };
