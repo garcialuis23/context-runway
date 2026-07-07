@@ -32,4 +32,25 @@ function readHistory() {
     .filter(Boolean);
 }
 
-module.exports = { readHistory, HISTORY_FILE, STATE_DIR };
+// Scans backward for the most recent entry that actually has `field` set,
+// regardless of which session wrote it. Using history[history.length - 1]
+// directly is wrong here: with multiple concurrent sessions, the very last
+// entry written might come from a brand-new session that hasn't gotten its
+// first API response yet (rate_limits still null), which would otherwise
+// hide perfectly good, more recent rate-limit data from an older session.
+function mostRecentWithField(history, field) {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (typeof history[i][field] === 'number') return history[i];
+  }
+  return null;
+}
+
+// Prefers a /rename'd session_name; falls back to directory + a short id
+// fragment, since two chats in the same project both show the same dir.
+function sessionLabel(entry) {
+  if (entry.sessionName) return entry.sessionName;
+  const shortId = entry.sessionId ? entry.sessionId.slice(0, 6) : '??????';
+  return entry.dir ? `${entry.dir} · #${shortId}` : `#${shortId}`;
+}
+
+module.exports = { readHistory, mostRecentWithField, sessionLabel, HISTORY_FILE, STATE_DIR };

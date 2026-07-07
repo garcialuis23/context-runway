@@ -312,7 +312,18 @@ function renderPanelHtml(nonce) {
     container.appendChild(details);
   }
 
-  function render(history) {
+  // Scans backward for the most recent entry that actually has the field set.
+  // With multiple concurrent sessions, history[history.length - 1] can be a
+  // brand-new session that hasn't gotten rate_limits yet, which would
+  // otherwise blank out perfectly good, more recent data from another one.
+  function mostRecentWithField(hist, field) {
+    for (let i = hist.length - 1; i >= 0; i--) {
+      if (typeof hist[i][field] === 'number') return hist[i];
+    }
+    return null;
+  }
+
+  function render(history, workspaceDir) {
     app.textContent = '';
 
     if (!history || history.length === 0) {
@@ -330,16 +341,9 @@ function renderPanelHtml(nonce) {
       return;
     }
 
-    const latest = history[history.length - 1];
-
-    // Context is per-session (never summed across sessions), but with more
-    // than one Claude Code window open concurrently, "the latest sample"
-    // can flip between them. Show every session active in the last two
-    // hours as its own chart, labeled by directory, so it's unambiguous
-    // which one you're looking at.
-    const RECENT_SESSION_WINDOW_MS = 2 * 60 * 60 * 1000;
-    const MAX_SESSION_CHARTS = 4;
-
+    // Group context samples by session so we can pick one to feature instead
+    // of showing every session at once (confusing — you want to know how
+    // *this* chat is doing, not scroll through every chat you've ever had).
     const bySession = new Map();
     for (const e of history) {
       if (typeof e.contextUsedPct !== 'number') continue;
@@ -357,32 +361,53 @@ function renderPanelHtml(nonce) {
       }
     }
     const allSessions = Array.from(bySession.values()).sort((a, b) => b.lastTs - a.lastTs);
-    const nowMs = Date.now();
-    const recentSessions = allSessions.filter((s) => nowMs - s.lastTs < RECENT_SESSION_WINDOW_MS);
-    const sessionsToShow = (recentSessions.length > 0 ? recentSessions : allSessions.slice(0, 1)).slice(0, MAX_SESSION_CHARTS);
 
-    sessionsToShow.forEach((s) => {
+    // "Current chat" = the most recently active session in *this* workspace
+    // folder, so it tracks whichever chat you're actually typing in right
+    // now and updates as you switch between chats in the same project.
+    // Falls back to the single most recently active session anywhere if
+    // none match (e.g. older entries recorded before dir was tracked).
+    const currentSession =
+      (workspaceDir && allSessions.find((s) => s.dir === workspaceDir)) || allSessions[0] || null;
+
+    if (currentSession) {
       const series = history
-        .filter((e) => e.sessionId === s.sessionId && typeof e.contextUsedPct === 'number')
+        .filter((e) => e.sessionId === currentSession.sessionId && typeof e.contextUsedPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.contextUsedPct }));
-      const label = sessionLabel(s);
-      renderChart(app, series, { title: 'Context window — ' + label });
-    });
+      renderChart(app, series, { title: 'Context window — this chat', subtitle: sessionLabel(currentSession) });
+    }
 
-    if (latest.fiveHourResetsAt != null) {
+    const fiveHourEntry = mostRecentWithField(history, 'fiveHourPct');
+    if (fiveHourEntry) {
       const fiveHourSeries = history
-        .filter((e) => e.fiveHourResetsAt === latest.fiveHourResetsAt && typeof e.fiveHourPct === 'number')
+        .filter((e) => e.fiveHourResetsAt === fiveHourEntry.fiveHourResetsAt && typeof e.fiveHourPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.fiveHourPct }));
-      const msToReset = latest.fiveHourResetsAt * 1000 - Date.now();
+      const msToReset = fiveHourEntry.fiveHourResetsAt * 1000 - Date.now();
       renderChart(app, fiveHourSeries, { title: '5-hour rate limit', subtitle: 'resets in ' + formatDuration(msToReset) });
     }
 
-    if (latest.sevenDayResetsAt != null) {
+    const sevenDayEntry = mostRecentWithField(history, 'sevenDayPct');
+    if (sevenDayEntry) {
       const sevenDaySeries = history
-        .filter((e) => e.sevenDayResetsAt === latest.sevenDayResetsAt && typeof e.sevenDayPct === 'number')
+        .filter((e) => e.sevenDayResetsAt === sevenDayEntry.sevenDayResetsAt && typeof e.sevenDayPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.sevenDayPct }));
-      const msToReset = latest.sevenDayResetsAt * 1000 - Date.now();
+      const msToReset = sevenDayEntry.sevenDayResetsAt * 1000 - Date.now();
       renderChart(app, sevenDaySeries, { title: '7-day rate limit', subtitle: 'resets in ' + formatDuration(msToReset) });
+    }
+
+    const otherSessions = allSessions.filter((s) => s !== currentSession).slice(0, 5);
+    if (otherSessions.length > 0) {
+      const otherWrap = el('details');
+      const summary = el('summary');
+      summary.textContent = 'Other sessions (' + otherSessions.length + ')';
+      otherWrap.appendChild(summary);
+      otherSessions.forEach((s) => {
+        const series = history
+          .filter((e) => e.sessionId === s.sessionId && typeof e.contextUsedPct === 'number')
+          .map((e) => ({ ts: e.ts, pct: e.contextUsedPct }));
+        renderChart(otherWrap, series, { title: 'Context window — ' + sessionLabel(s) });
+      });
+      app.appendChild(otherWrap);
     }
 
     renderTable(app, history);
@@ -390,7 +415,7 @@ function renderPanelHtml(nonce) {
 
   window.addEventListener('message', (event) => {
     const message = event.data;
-    if (message.type === 'history') render(message.history);
+    if (message.type === 'history') render(message.history, message.workspaceDir);
   });
 })();
 </script>

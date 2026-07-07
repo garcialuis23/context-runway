@@ -3,7 +3,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { readHistory, HISTORY_FILE, STATE_DIR } = require('./historyReader');
+const { readHistory, mostRecentWithField, sessionLabel, HISTORY_FILE, STATE_DIR } = require('./historyReader');
 const { renderPanelHtml, getNonce } = require('./panel');
 
 let statusBarItem;
@@ -17,32 +17,64 @@ function backgroundForPct(pct) {
   return undefined;
 }
 
+// Name of the workspace folder this VS Code window has open, so the status
+// bar's "ctx" figure can prefer a session in *this* project over whichever
+// session anywhere last happened to write (see mostRecentContextEntry).
+function currentWorkspaceDir() {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  return folder ? path.basename(folder.uri.fsPath) : null;
+}
+
+function mostRecentContextEntry(history, workspaceDir) {
+  if (workspaceDir) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].dir === workspaceDir && typeof history[i].contextUsedPct === 'number') return history[i];
+    }
+  }
+  return mostRecentWithField(history, 'contextUsedPct');
+}
+
 function refresh() {
   const history = readHistory();
-  const latest = history.length ? history[history.length - 1] : null;
+  const workspaceDir = currentWorkspaceDir();
 
-  if (!latest) {
+  if (history.length === 0) {
     statusBarItem.text = '$(pulse) context-runway: no data';
     statusBarItem.tooltip = `No usage data found at ${HISTORY_FILE}.\nInstall the context-runway statusline first (see statusline/README.md), then keep using Claude Code.`;
     statusBarItem.backgroundColor = undefined;
     statusBarItem.show();
-    if (panel) panel.webview.postMessage({ type: 'history', history: [] });
+    if (panel) panel.webview.postMessage({ type: 'history', history: [], workspaceDir });
     return;
   }
 
-  const parts = [];
-  if (typeof latest.contextUsedPct === 'number') parts.push(`ctx ${latest.contextUsedPct.toFixed(0)}%`);
-  if (typeof latest.fiveHourPct === 'number') parts.push(`5h ${latest.fiveHourPct.toFixed(0)}%`);
-  if (typeof latest.sevenDayPct === 'number') parts.push(`7d ${latest.sevenDayPct.toFixed(0)}%`);
+  // Each metric independently uses the most recent entry that actually has
+  // it, rather than blindly trusting history[history.length - 1] — with
+  // multiple concurrent sessions, the very last write can come from a
+  // brand-new session still missing rate_limits, which would otherwise blank
+  // out perfectly good, more recent numbers from another session.
+  const ctxEntry = mostRecentContextEntry(history, workspaceDir);
+  const fiveHourEntry = mostRecentWithField(history, 'fiveHourPct');
+  const sevenDayEntry = mostRecentWithField(history, 'sevenDayPct');
 
-  const worstPct = Math.max(latest.contextUsedPct || 0, latest.fiveHourPct || 0, latest.sevenDayPct || 0);
+  const parts = [];
+  if (ctxEntry) parts.push(`ctx ${ctxEntry.contextUsedPct.toFixed(0)}%`);
+  if (fiveHourEntry) parts.push(`5h ${fiveHourEntry.fiveHourPct.toFixed(0)}%`);
+  if (sevenDayEntry) parts.push(`7d ${sevenDayEntry.sevenDayPct.toFixed(0)}%`);
+
+  const worstPct = Math.max(
+    ctxEntry?.contextUsedPct || 0,
+    fiveHourEntry?.fiveHourPct || 0,
+    sevenDayEntry?.sevenDayPct || 0
+  );
 
   statusBarItem.text = `$(pulse) ${parts.length ? parts.join(' · ') : 'context-runway'}`;
-  statusBarItem.tooltip = 'Click for context & rate-limit history — Context Runway';
+  statusBarItem.tooltip = ctxEntry
+    ? `Context: ${sessionLabel(ctxEntry)}\nClick for context & rate-limit history — Context Runway`
+    : 'Click for context & rate-limit history — Context Runway';
   statusBarItem.backgroundColor = backgroundForPct(worstPct);
   statusBarItem.show();
 
-  if (panel) panel.webview.postMessage({ type: 'history', history });
+  if (panel) panel.webview.postMessage({ type: 'history', history, workspaceDir });
 }
 
 function showPanel() {

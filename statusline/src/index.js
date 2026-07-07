@@ -100,7 +100,17 @@ async function main() {
 
   const lines = [];
 
-  lines.push(`${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}${sessionLabel}${COLORS.reset}`);
+  // Only show the session label when there's actually another session
+  // active recently — otherwise it's just noise in the common case of one
+  // chat at a time.
+  const OTHER_SESSION_WINDOW_MS = 30 * 60 * 1000;
+  const hasOtherRecentSession = history.some(
+    (e) => e.sessionId !== sessionId && now - e.ts < OTHER_SESSION_WINDOW_MS
+  );
+  const header = hasOtherRecentSession
+    ? `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir} ${COLORS.dim}${sessionLabel}${COLORS.reset}`
+    : `${COLORS.cyan}[${model}]${COLORS.reset} 📁 ${dir}`;
+  lines.push(header);
 
   if (contextUsedPct != null) {
     const remainingTokens =
