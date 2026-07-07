@@ -7,6 +7,8 @@ A status bar item + panel that visualizes:
 
 Click the status bar item (or run **Context Runway: Show Usage Panel**) to open the full view.
 
+Requires VS Code >= 1.85 and Node.js >= 18 (to package the `.vsix`).
+
 ## Data source
 
 This extension is a viewer. It does not talk to Claude Code or the Anthropic API directly — it reads the same rolling snapshot log that the [`statusline`](../statusline) tool writes to `~/.claude/context-runway/usage-history.jsonl` every time Claude Code's status line refreshes.
@@ -31,3 +33,8 @@ Or package a local `.vsix` to install manually:
 npm run package
 code --install-extension context-runway-0.1.0.vsix
 ```
+
+## Contributing
+
+See the [root CONTRIBUTING.md](../CONTRIBUTING.md) — PRs welcome, `main` is protected.
+Found a security issue? See [SECURITY.md](../SECURITY.md) instead of opening a public issue.

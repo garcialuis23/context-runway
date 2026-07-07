@@ -7,6 +7,8 @@ A Claude Code status line that shows, at a glance:
 
 It reads the JSON Claude Code already sends to status line scripts (`context_window`, `rate_limits`) — no scraping, no extra API calls, no added token cost.
 
+Requires Node.js >= 18.
+
 ## Install
 
 ```bash
@@ -36,3 +38,8 @@ npm test
 ```
 
 Pipes `test/fixture.json` (a mock payload matching Claude Code's documented schema) through the script so you can see the output format.
+
+## Contributing
+
+See the [root CONTRIBUTING.md](../CONTRIBUTING.md) — PRs welcome, `main` is protected.
+Found a security issue? See [SECURITY.md](../SECURITY.md) instead of opening a public issue.
