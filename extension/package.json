@@ -35,7 +35,17 @@
         "command": "context-runway.clearHistory",
         "title": "Context Runway: Clear Usage History"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Context Runway",
+      "properties": {
+        "context-runway.telemetry.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Opt in to anonymous usage telemetry (which commands you run — no file paths, no usage numbers, no other personal data). Off by default. Also requires VS Code's own `#telemetry.telemetryLevel#` setting to be `all` or `error`; if that's `off`, nothing is sent regardless of this setting."
+        }
+      }
+    }
   },
   "scripts": {
     "package": "npx --yes @vscode/vsce package",

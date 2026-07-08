@@ -13,6 +13,7 @@ const {
   STATE_DIR,
 } = require('./historyReader');
 const { renderPanelHtml, getNonce } = require('./panel');
+const telemetry = require('./telemetry');
 
 let statusBarItem;
 let panel;
@@ -106,6 +107,7 @@ function refresh() {
 }
 
 function showPanel() {
+  telemetry.sendEvent('showPanel');
   if (panel) {
     panel.reveal(vscode.ViewColumn.Beside);
     refresh();
@@ -124,6 +126,7 @@ function showPanel() {
 }
 
 async function openRawLog() {
+  telemetry.sendEvent('openRawLog');
   if (!fs.existsSync(HISTORY_FILE)) {
     vscode.window.showInformationMessage(
       'No usage history file yet — install the statusline (statusline/README.md) and start chatting first.'
@@ -145,6 +148,7 @@ async function clearHistory() {
   );
   if (choice !== 'Clear History') return;
 
+  telemetry.sendEvent('clearHistory');
   try {
     fs.mkdirSync(STATE_DIR, { recursive: true });
     fs.writeFileSync(HISTORY_FILE, '');
@@ -157,6 +161,7 @@ async function clearHistory() {
 }
 
 function activate(context) {
+  telemetry.sendEvent('activate');
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.command = 'context-runway.showPanel';
   context.subscriptions.push(statusBarItem);

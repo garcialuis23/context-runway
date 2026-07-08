@@ -36,6 +36,12 @@ npm run package
 code --install-extension context-runway-0.1.0.vsix
 ```
 
+## Telemetry
+
+Off by default, and inert even when turned on — there is currently no collection backend wired up, so nothing leaves your machine either way. It exists as scaffolding for a future release.
+
+If you opt in via the `context-runway.telemetry.enabled` setting, and VS Code's own [`telemetry.telemetryLevel`](https://code.visualstudio.com/docs/configure/telemetry) is not `off`, the extension would send only which command you ran (`showPanel`, `openRawLog`, `clearHistory`, `activate`) — never file paths, usage numbers, or any other content from your history log.
+
 ## Tests
 
 ```bash

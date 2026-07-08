@@ -44,6 +44,11 @@ function createVscodeMock() {
   // Configurable per test: what the "clear history?" confirmation resolves to.
   let showWarningMessageResolution;
 
+  // Configurable per test: settings.json values, keyed by full dotted id
+  // (e.g. 'context-runway.telemetry.enabled'). Unset keys fall back to
+  // whatever default the caller passes to config.get(key, default).
+  const configValues = {};
+
   function createWebviewPanel(viewType, title, showOptions) {
     const panel = {
       viewType,
@@ -76,6 +81,11 @@ function createVscodeMock() {
     StatusBarAlignment: { Left: 1, Right: 2 },
     ViewColumn: { Active: -1, Beside: -2, One: 1 },
     ThemeColor,
+    env: {
+      // Stands in for VS Code's global telemetry.telemetryLevel kill-switch;
+      // tests flip it directly since it's a plain property, not an API call.
+      isTelemetryEnabled: true,
+    },
     window: {
       createStatusBarItem: () => statusBarItem,
       createWebviewPanel: (...args) => createWebviewPanel(...args),
@@ -100,6 +110,15 @@ function createVscodeMock() {
       openTextDocument: async (uriOrPath) => {
         openTextDocumentCalls.push(uriOrPath);
         return { uri: uriOrPath };
+      },
+      getConfiguration: (section) => {
+        const prefix = section ? `${section}.` : '';
+        return {
+          get: (key, defaultValue) => {
+            const fullKey = `${prefix}${key}`;
+            return Object.prototype.hasOwnProperty.call(configValues, fullKey) ? configValues[fullKey] : defaultValue;
+          },
+        };
       },
     },
     commands: {
@@ -126,6 +145,9 @@ function createVscodeMock() {
     showErrorMessageCalls,
     setShowWarningMessageResolution(value) {
       showWarningMessageResolution = value;
+    },
+    setConfig(fullKey, value) {
+      configValues[fullKey] = value;
     },
   };
 }
