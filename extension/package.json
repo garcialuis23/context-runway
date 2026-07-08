@@ -38,7 +38,8 @@
     ]
   },
   "scripts": {
-    "package": "npx --yes @vscode/vsce package"
+    "package": "npx --yes @vscode/vsce package",
+    "test": "node --test"
   },
   "license": "MIT"
 }

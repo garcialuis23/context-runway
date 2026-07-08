@@ -34,6 +34,14 @@ npm run package
 code --install-extension context-runway-0.1.0.vsix
 ```
 
+## Tests
+
+```bash
+npm test
+```
+
+Runs the automated suite (`node --test`) against `src/historyReader.js`, `src/panel.js`, and `src/extension.js`. The `extension.js` tests run without VS Code by swapping in a minimal `vscode` module mock (`test-mocks/vscode.js`), and every test points `CONTEXT_RUNWAY_STATE_DIR` at a throwaway temp directory, so nothing ever touches your real `~/.claude/context-runway/usage-history.jsonl`.
+
 ## Contributing
 
 See the [root CONTRIBUTING.md](../CONTRIBUTING.md) — PRs welcome, `main` is protected.
