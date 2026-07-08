@@ -26,6 +26,14 @@
       {
         "command": "context-runway.showPanel",
         "title": "Context Runway: Show Usage Panel"
+      },
+      {
+        "command": "context-runway.openRawLog",
+        "title": "Context Runway: Open Raw Usage Log"
+      },
+      {
+        "command": "context-runway.clearHistory",
+        "title": "Context Runway: Clear Usage History"
       }
     ]
   },

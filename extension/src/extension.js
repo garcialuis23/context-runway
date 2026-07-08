@@ -123,12 +123,47 @@ function showPanel() {
   refresh();
 }
 
+async function openRawLog() {
+  if (!fs.existsSync(HISTORY_FILE)) {
+    vscode.window.showInformationMessage(
+      'No usage history file yet — install the statusline (statusline/README.md) and start chatting first.'
+    );
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(HISTORY_FILE);
+  await vscode.window.showTextDocument(doc);
+}
+
+// The history file is shared across every Claude Code session and project,
+// not just this one — a modal + explicit confirmation label makes sure
+// that's clear before wiping it.
+async function clearHistory() {
+  const choice = await vscode.window.showWarningMessage(
+    'This clears context-runway usage history for ALL Claude Code sessions and projects, not just this one. This cannot be undone.',
+    { modal: true },
+    'Clear History'
+  );
+  if (choice !== 'Clear History') return;
+
+  try {
+    fs.mkdirSync(STATE_DIR, { recursive: true });
+    fs.writeFileSync(HISTORY_FILE, '');
+  } catch (err) {
+    vscode.window.showErrorMessage(`Context Runway: could not clear history — ${err.message}`);
+    return;
+  }
+  refresh();
+  vscode.window.showInformationMessage('Context Runway: usage history cleared.');
+}
+
 function activate(context) {
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.command = 'context-runway.showPanel';
   context.subscriptions.push(statusBarItem);
 
   context.subscriptions.push(vscode.commands.registerCommand('context-runway.showPanel', showPanel));
+  context.subscriptions.push(vscode.commands.registerCommand('context-runway.openRawLog', openRawLog));
+  context.subscriptions.push(vscode.commands.registerCommand('context-runway.clearHistory', clearHistory));
 
   refresh();
 
