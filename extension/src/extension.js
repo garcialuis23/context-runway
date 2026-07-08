@@ -39,6 +39,13 @@ function mostRecentContextEntry(history, workspaceDir) {
     for (let i = history.length - 1; i >= 0; i--) {
       if (history[i].dir === workspaceDir && typeof history[i].contextUsedPct === 'number') return history[i];
     }
+    // No entry for this specific project yet. Only fall through to a global
+    // "most recent anywhere" entry when dir isn't tracked at all (legacy
+    // data written before dir was recorded) — otherwise a brand-new project
+    // would show another project's percentage as if it were its own, which
+    // is actively misleading since context usage is per-session, unlike the
+    // account-wide rate limits below.
+    if (history.some((e) => e.dir)) return null;
   }
   return mostRecentWithField(history, 'contextUsedPct');
 }

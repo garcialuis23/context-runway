@@ -423,11 +423,16 @@ function renderPanelHtml(nonce) {
 
     // "Current chat" = the most recently active session in *this* workspace
     // folder, so it tracks whichever chat you're actually typing in right
-    // now and updates as you switch between chats in the same project.
-    // Falls back to the single most recently active session anywhere if
-    // none match (e.g. older entries recorded before dir was tracked).
-    const currentSession =
-      (workspaceDir && allSessions.find((s) => s.dir === workspaceDir)) || allSessions[0] || null;
+    // now and updates as you switch between chats in the same project. Only
+    // falls back to the single most recently active session anywhere when
+    // dir isn't tracked at all (legacy entries recorded before dir was
+    // tracked) — otherwise opening a brand-new project with no samples of
+    // its own yet would show a *different* project's stale percentage as if
+    // it belonged to this chat.
+    const hasAnyDirData = allSessions.some((s) => s.dir);
+    const currentSession = workspaceDir
+      ? allSessions.find((s) => s.dir === workspaceDir) || (hasAnyDirData ? null : allSessions[0] || null)
+      : allSessions[0] || null;
 
     const nowMs = Date.now();
 
@@ -453,6 +458,17 @@ function renderPanelHtml(nonce) {
         subtitle: sessionLabel(currentSession),
         meta: metaParts.join(' · '),
       });
+    } else if (workspaceDir) {
+      const card = el('div', { class: 'card' });
+      const head = el('div', { class: 'card-head' });
+      const title = el('div', { class: 'card-title' });
+      title.textContent = 'Context window — this chat';
+      head.appendChild(title);
+      card.appendChild(head);
+      const empty = el('div', { class: 'card-sub' });
+      empty.textContent = 'No data yet for ' + workspaceDir + ' — send a message in Claude Code and it will show up here.';
+      card.appendChild(empty);
+      app.appendChild(card);
     }
 
     // Rate limits are account-wide, so unlike context there's no "current

@@ -143,6 +143,22 @@ test('activate: falls back to the most recent session anywhere with no matching 
   assert.match(env.mock.statusBarItem.text, /ctx 80%/);
 });
 
+test('activate: does not show a different project\'s % for a brand-new project with no samples yet', (t) => {
+  const now = Date.now();
+  const env = setup(
+    [
+      { ts: now - 1000, sessionId: 's1', dir: 'myproj', contextUsedPct: 30 },
+      { ts: now, sessionId: 's2', dir: 'otherproj', contextUsedPct: 80 },
+    ],
+    { workspaceDir: 'brand-new-project' }
+  );
+  t.after(() => env.cleanup());
+
+  assert.ok(!env.mock.statusBarItem.text.includes('ctx'));
+  assert.ok(!env.mock.statusBarItem.text.includes('30%'));
+  assert.ok(!env.mock.statusBarItem.text.includes('80%'));
+});
+
 test('activate: shows -- and a warning for an expired rate-limit window instead of a stale %', (t) => {
   const now = Date.now();
   const env = setup([
