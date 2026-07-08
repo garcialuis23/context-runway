@@ -18,7 +18,8 @@ Visual tooling to see how much conversation/context "runway" you have left when 
 ## Quick start
 
 ```bash
-cd statusline
+git clone https://github.com/garcialuis23/context-runway.git
+cd context-runway/statusline
 npm run install-statusline
 ```
 
