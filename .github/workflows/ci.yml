@@ -20,3 +20,6 @@ jobs:
       - name: Run statusline tests
         working-directory: statusline
         run: npm test
+      - name: Run extension tests
+        working-directory: extension
+        run: npm test
