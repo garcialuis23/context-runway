@@ -64,4 +64,24 @@ function formatTokenCount(n) {
   return String(n);
 }
 
-module.exports = { readHistory, mostRecentWithField, sessionLabel, formatTokenCount, HISTORY_FILE, STATE_DIR };
+// Same fallback order as statusline/src/lib/render.js.
+function formatAgo(ms) {
+  if (ms < 60 * 1000) return 'just now';
+  const totalMin = Math.round(ms / 60000);
+  const days = Math.floor(totalMin / (60 * 24));
+  const hours = Math.floor((totalMin % (60 * 24)) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days}d${hours}h ago`;
+  if (hours > 0) return `${hours}h${mins}m ago`;
+  return `${mins}m ago`;
+}
+
+module.exports = {
+  readHistory,
+  mostRecentWithField,
+  sessionLabel,
+  formatTokenCount,
+  formatAgo,
+  HISTORY_FILE,
+  STATE_DIR,
+};

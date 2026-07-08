@@ -8,6 +8,7 @@ const {
   mostRecentWithField,
   sessionLabel,
   formatTokenCount,
+  formatAgo,
   HISTORY_FILE,
   STATE_DIR,
 } = require('./historyReader');
@@ -63,26 +64,41 @@ function refresh() {
   const fiveHourEntry = mostRecentWithField(history, 'fiveHourPct');
   const sevenDayEntry = mostRecentWithField(history, 'sevenDayPct');
 
+  const nowMs = Date.now();
+  // Once resets_at is in the past, the number we have on hand isn't just
+  // old — it's guaranteed wrong, since that window has already rolled over
+  // to something else. This only happens when nobody has sent a message
+  // anywhere long enough for the window to expire unnoticed.
+  const fiveHourExpired = !!fiveHourEntry && fiveHourEntry.fiveHourResetsAt * 1000 < nowMs;
+  const sevenDayExpired = !!sevenDayEntry && sevenDayEntry.sevenDayResetsAt * 1000 < nowMs;
+
   const parts = [];
   if (ctxEntry) parts.push(`ctx ${ctxEntry.contextUsedPct.toFixed(0)}%`);
-  if (fiveHourEntry) parts.push(`5h ${fiveHourEntry.fiveHourPct.toFixed(0)}%`);
-  if (sevenDayEntry) parts.push(`7d ${sevenDayEntry.sevenDayPct.toFixed(0)}%`);
+  if (fiveHourEntry) parts.push(fiveHourExpired ? '5h --' : `5h ${fiveHourEntry.fiveHourPct.toFixed(0)}%`);
+  if (sevenDayEntry) parts.push(sevenDayExpired ? '7d --' : `7d ${sevenDayEntry.sevenDayPct.toFixed(0)}%`);
 
   const worstPct = Math.max(
     ctxEntry?.contextUsedPct || 0,
-    fiveHourEntry?.fiveHourPct || 0,
-    sevenDayEntry?.sevenDayPct || 0
+    fiveHourExpired ? 0 : fiveHourEntry?.fiveHourPct || 0,
+    sevenDayExpired ? 0 : sevenDayEntry?.sevenDayPct || 0
   );
 
   statusBarItem.text = `$(pulse) ${parts.length ? parts.join(' · ') : 'context-runway'}`;
+
+  const tooltipLines = [];
   if (ctxEntry) {
     const modelMeta = [ctxEntry.model, formatTokenCount(ctxEntry.contextWindowSize), ctxEntry.effortLevel]
       .filter(Boolean)
       .join(' · ');
-    statusBarItem.tooltip = `${sessionLabel(ctxEntry)}${modelMeta ? ` (${modelMeta})` : ''}\nClick for context & rate-limit history — Context Runway`;
-  } else {
-    statusBarItem.tooltip = 'Click for context & rate-limit history — Context Runway';
+    tooltipLines.push(`${sessionLabel(ctxEntry)}${modelMeta ? ` (${modelMeta})` : ''}`);
+    tooltipLines.push(`Context updated ${formatAgo(nowMs - ctxEntry.ts)}`);
   }
+  if (fiveHourExpired || sevenDayExpired) {
+    tooltipLines.push('⚠ Rate-limit window(s) have reset since the last update — send a message to refresh.');
+  }
+  tooltipLines.push('Click for context & rate-limit history — Context Runway');
+  statusBarItem.tooltip = tooltipLines.join('\n');
+
   statusBarItem.backgroundColor = backgroundForPct(worstPct);
   statusBarItem.show();
 

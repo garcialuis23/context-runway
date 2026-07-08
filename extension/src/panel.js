@@ -119,7 +119,7 @@ function renderPanelHtml(nonce) {
 
   function formatTime(ts) {
     const d = new Date(ts);
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
   function formatDuration(ms) {
@@ -201,10 +201,15 @@ function renderPanelHtml(nonce) {
     const valueRow = el('div');
     const latest = points.length ? points[points.length - 1] : null;
     const valueEl = el('span', { class: 'card-value' });
-    valueEl.textContent = latest ? Math.round(latest.pct) + '%' : '--';
+    valueEl.textContent = opts.stale ? '—' : latest ? Math.round(latest.pct) + '%' : '--';
     valueRow.appendChild(valueEl);
 
-    if (latest) {
+    if (opts.stale) {
+      const badge = el('span', { class: 'status-badge status-warning' });
+      badge.textContent = '\\u25CF stale';
+      badge.style.marginLeft = '8px';
+      valueRow.appendChild(badge);
+    } else if (latest) {
       const st = statusForPct(latest.pct);
       const badge = el('span', { class: 'status-badge ' + st.cls });
       badge.textContent = st.icon + ' ' + st.word;
@@ -263,14 +268,14 @@ function renderPanelHtml(nonce) {
 
     const lastX = xScale(maxTs);
     const lastY = yScale(latest.pct);
-    const st = statusForPct(latest.pct);
-    svg.appendChild(el('circle', { class: 'end-dot', cx: lastX, cy: lastY, r: 5, fill: st.color }, SVG_NS));
+    const dotColor = opts.stale ? 'var(--text-muted)' : statusForPct(latest.pct).color;
+    svg.appendChild(el('circle', { class: 'end-dot', cx: lastX, cy: lastY, r: 5, fill: dotColor }, SVG_NS));
     const endLabel = el('text', {
       class: 'end-label',
       x: Math.min(lastX + 6, CHART_W - 24),
       y: Math.max(lastY - 8, 12),
     }, SVG_NS);
-    endLabel.textContent = Math.round(latest.pct) + '%';
+    endLabel.textContent = opts.stale ? Math.round(latest.pct) + '%?' : Math.round(latest.pct) + '%';
     svg.appendChild(endLabel);
 
     const crosshair = el('line', { class: 'crosshair', x1: 0, x2: 0, y1: PAD.top, y2: CHART_H - PAD.bottom }, SVG_NS);
@@ -424,6 +429,8 @@ function renderPanelHtml(nonce) {
     const currentSession =
       (workspaceDir && allSessions.find((s) => s.dir === workspaceDir)) || allSessions[0] || null;
 
+    const nowMs = Date.now();
+
     if (currentSession) {
       const series = history
         .filter((e) => e.sessionId === currentSession.sessionId && typeof e.contextUsedPct === 'number')
@@ -434,15 +441,11 @@ function renderPanelHtml(nonce) {
         formatTokenCount(currentSession.contextWindowSize),
         currentSession.effortLevel,
       ].filter(Boolean);
+      metaParts.push('updated ' + formatAgo(nowMs - currentSession.lastTs));
 
-      const compaction = detectRecentCompaction(
-        history,
-        currentSession.sessionId,
-        currentSession.contextWindowSize,
-        Date.now()
-      );
+      const compaction = detectRecentCompaction(history, currentSession.sessionId, currentSession.contextWindowSize, nowMs);
       if (compaction) {
-        metaParts.push('🗜 ' + (compaction.auto ? 'auto-compacted' : 'compacted') + ' ' + formatAgo(Date.now() - compaction.ts));
+        metaParts.push('🗜 ' + (compaction.auto ? 'auto-compacted' : 'compacted') + ' ' + formatAgo(nowMs - compaction.ts));
       }
 
       renderChart(app, series, {
@@ -452,13 +455,23 @@ function renderPanelHtml(nonce) {
       });
     }
 
+    // Rate limits are account-wide, so unlike context there's no "current
+    // session" concept — but there's a sharper failure mode: if nobody has
+    // sent a message anywhere since before this window's resets_at passed,
+    // we're still showing the *last* percentage we ever saw, even though
+    // the real window has already rolled over and reset to something else
+    // entirely. Once resets_at is in the past, the number is not stale —
+    // it's simply wrong, so show that plainly instead of a misleading %.
     const fiveHourEntry = mostRecentWithField(history, 'fiveHourPct');
     if (fiveHourEntry) {
       const fiveHourSeries = history
         .filter((e) => e.fiveHourResetsAt === fiveHourEntry.fiveHourResetsAt && typeof e.fiveHourPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.fiveHourPct }));
-      const msToReset = fiveHourEntry.fiveHourResetsAt * 1000 - Date.now();
-      renderChart(app, fiveHourSeries, { title: '5-hour rate limit', subtitle: 'resets in ' + formatDuration(msToReset) });
+      const expired = fiveHourEntry.fiveHourResetsAt * 1000 < nowMs;
+      const subtitle = expired
+        ? 'window reset since last update (' + formatAgo(nowMs - fiveHourEntry.ts) + ')'
+        : 'resets in ' + formatDuration(fiveHourEntry.fiveHourResetsAt * 1000 - nowMs);
+      renderChart(app, fiveHourSeries, { title: '5-hour rate limit', subtitle, stale: expired });
     }
 
     const sevenDayEntry = mostRecentWithField(history, 'sevenDayPct');
@@ -466,8 +479,11 @@ function renderPanelHtml(nonce) {
       const sevenDaySeries = history
         .filter((e) => e.sevenDayResetsAt === sevenDayEntry.sevenDayResetsAt && typeof e.sevenDayPct === 'number')
         .map((e) => ({ ts: e.ts, pct: e.sevenDayPct }));
-      const msToReset = sevenDayEntry.sevenDayResetsAt * 1000 - Date.now();
-      renderChart(app, sevenDaySeries, { title: '7-day rate limit', subtitle: 'resets in ' + formatDuration(msToReset) });
+      const expired = sevenDayEntry.sevenDayResetsAt * 1000 < nowMs;
+      const subtitle = expired
+        ? 'window reset since last update (' + formatAgo(nowMs - sevenDayEntry.ts) + ')'
+        : 'resets in ' + formatDuration(sevenDayEntry.sevenDayResetsAt * 1000 - nowMs);
+      renderChart(app, sevenDaySeries, { title: '7-day rate limit', subtitle, stale: expired });
     }
 
     const otherSessions = allSessions.filter((s) => s !== currentSession).slice(0, 5);

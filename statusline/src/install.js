@@ -41,6 +41,11 @@ function main() {
     type: 'command',
     command: `node "${INDEX_PATH}"`,
     padding: 1,
+    // Without this, the "resets in Xh Ym" countdown only updates on your
+    // next message — leave the terminal idle for hours and it visibly
+    // freezes even though the real reset time keeps approaching. Re-running
+    // every 60s keeps it live.
+    refreshInterval: 60,
   };
 
   fs.mkdirSync(path.dirname(SETTINGS_PATH), { recursive: true });
