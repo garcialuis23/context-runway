@@ -9,6 +9,16 @@ Visual tooling to see how much conversation/context "runway" you have left when 
 - [`statusline/`](statusline/) — a Claude Code status line showing context window usage and rate-limit burn-rate projections.
 - [`extension/`](extension/) — a companion VS Code extension with a status bar item and a webview panel with history charts, reading the same data the statusline writes.
 
+## Screenshots
+
+Status line, right in the terminal:
+
+![Status line showing context window and rate-limit usage](docs/screenshots/statusline.png)
+
+The VS Code panel, with history charts:
+
+![VS Code panel with context window and rate-limit charts](docs/screenshots/panel.png)
+
 ## Requirements
 
 - Node.js >= 18

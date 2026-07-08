@@ -7,6 +7,8 @@ A Claude Code status line that shows, at a glance:
 
 It reads the JSON Claude Code already sends to status line scripts (`context_window`, `rate_limits`) — no scraping, no extra API calls, no added token cost.
 
+![Status line showing context window and rate-limit usage](../docs/screenshots/statusline.png)
+
 Requires Node.js >= 18.
 
 ## Install
