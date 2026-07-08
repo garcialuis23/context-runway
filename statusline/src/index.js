@@ -204,4 +204,15 @@ async function main() {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  main,
+  lastPathSegment,
+  averageTurnDelta,
+  detectRecentCompaction,
+  formatAgo,
+  renderRateLimitRow,
+};

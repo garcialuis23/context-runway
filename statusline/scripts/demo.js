@@ -2,16 +2,17 @@
 'use strict';
 
 // Runs the statusline against the mock fixture with CONTEXT_RUNWAY_STATE_DIR
-// pointed at a throwaway temp directory, so `npm test` never writes to the
-// real ~/.claude/context-runway/usage-history.jsonl.
+// pointed at a throwaway temp directory, so `npm run demo` never writes to
+// the real ~/.claude/context-runway/usage-history.jsonl. This is a manual
+// output preview, not part of the automated suite (see test/ for that).
 
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const tmpStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-runway-test-'));
-const fixturePath = path.join(__dirname, 'fixture.json');
+const tmpStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-runway-demo-'));
+const fixturePath = path.join(__dirname, '..', 'test', 'fixture.json');
 const indexPath = path.join(__dirname, '..', 'src', 'index.js');
 
 const result = spawnSync(process.execPath, [indexPath], {

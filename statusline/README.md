@@ -12,7 +12,8 @@ Requires Node.js >= 18.
 ## Install
 
 ```bash
-cd statusline
+git clone https://github.com/garcialuis23/context-runway.git
+cd context-runway/statusline
 npm run install-statusline
 ```
 
@@ -34,10 +35,18 @@ npm run uninstall-statusline
 ## Try it without installing
 
 ```bash
-npm test
+npm run demo
 ```
 
 Pipes `test/fixture.json` (a mock payload matching Claude Code's documented schema) through the script so you can see the output format.
+
+## Tests
+
+```bash
+npm test
+```
+
+Runs the automated suite (`node --test`) covering `src/lib/*` and `src/index.js`, including edge cases like malformed input, throttling, pruning, compaction detection, and rate-limit projections. Every test that touches the filesystem points `CONTEXT_RUNWAY_STATE_DIR` at a throwaway temp directory, so it never reads or writes your real `~/.claude/context-runway/usage-history.jsonl`.
 
 ## Contributing
 
