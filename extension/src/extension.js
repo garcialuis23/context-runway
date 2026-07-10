@@ -101,6 +101,17 @@ function refresh() {
     tooltipLines.push(`${sessionLabel(ctxEntry)}${modelMeta ? ` (${modelMeta})` : ''}`);
     tooltipLines.push(`Context updated ${formatAgo(nowMs - ctxEntry.ts)}`);
   }
+  // Rate limits are account-wide (see mostRecentWithField in historyReader.js),
+  // so the freshest number can come from a *different* session than the one
+  // driving ctxEntry — e.g. a terminal session in another project. Surface
+  // that explicitly so it's clear the cross-session data really is flowing,
+  // rather than looking like a stale/stuck number.
+  if (fiveHourEntry && !fiveHourExpired && fiveHourEntry.sessionId !== ctxEntry?.sessionId) {
+    tooltipLines.push(`5h from ${sessionLabel(fiveHourEntry)}, updated ${formatAgo(nowMs - fiveHourEntry.ts)}`);
+  }
+  if (sevenDayEntry && !sevenDayExpired && sevenDayEntry.sessionId !== ctxEntry?.sessionId) {
+    tooltipLines.push(`7d from ${sessionLabel(sevenDayEntry)}, updated ${formatAgo(nowMs - sevenDayEntry.ts)}`);
+  }
   if (fiveHourExpired || sevenDayExpired) {
     tooltipLines.push('⚠ Rate-limit window(s) have reset since the last update — send a message to refresh.');
   }

@@ -478,6 +478,16 @@ function renderPanelHtml(nonce) {
     // the real window has already rolled over and reset to something else
     // entirely. Once resets_at is in the past, the number is not stale —
     // it's simply wrong, so show that plainly instead of a misleading %.
+    // Rate limits are account-wide, so the freshest sample can come from a
+    // different session than the one featured above (e.g. a terminal session
+    // in another project feeding a VS Code chat's rate-limit numbers). Make
+    // that source explicit whenever it isn't the featured session — otherwise
+    // a borrowed number just looks like a stuck/stale one.
+    function crossSessionMeta(entry) {
+      if (!entry || entry.sessionId === currentSession?.sessionId) return null;
+      return 'via ' + sessionLabel(entry) + ' · updated ' + formatAgo(nowMs - entry.ts);
+    }
+
     const fiveHourEntry = mostRecentWithField(history, 'fiveHourPct');
     if (fiveHourEntry) {
       const fiveHourSeries = history
@@ -487,7 +497,7 @@ function renderPanelHtml(nonce) {
       const subtitle = expired
         ? 'window reset since last update (' + formatAgo(nowMs - fiveHourEntry.ts) + ')'
         : 'resets in ' + formatDuration(fiveHourEntry.fiveHourResetsAt * 1000 - nowMs);
-      renderChart(app, fiveHourSeries, { title: '5-hour rate limit', subtitle, stale: expired });
+      renderChart(app, fiveHourSeries, { title: '5-hour rate limit', subtitle, meta: crossSessionMeta(fiveHourEntry), stale: expired });
     }
 
     const sevenDayEntry = mostRecentWithField(history, 'sevenDayPct');
@@ -499,7 +509,7 @@ function renderPanelHtml(nonce) {
       const subtitle = expired
         ? 'window reset since last update (' + formatAgo(nowMs - sevenDayEntry.ts) + ')'
         : 'resets in ' + formatDuration(sevenDayEntry.sevenDayResetsAt * 1000 - nowMs);
-      renderChart(app, sevenDaySeries, { title: '7-day rate limit', subtitle, stale: expired });
+      renderChart(app, sevenDaySeries, { title: '7-day rate limit', subtitle, meta: crossSessionMeta(sevenDayEntry), stale: expired });
     }
 
     const otherSessions = allSessions.filter((s) => s !== currentSession).slice(0, 5);

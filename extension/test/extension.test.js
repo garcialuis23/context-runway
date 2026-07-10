@@ -179,6 +179,53 @@ test('activate: shows -- and a warning for an expired rate-limit window instead 
   assert.match(env.mock.statusBarItem.tooltip, /Rate-limit window\(s\) have reset/);
 });
 
+test('activate: tooltip stays quiet about sourcing when ctx and rate limits share one session', (t) => {
+  const now = Date.now();
+  const env = setup([
+    {
+      ts: now,
+      sessionId: 's1',
+      dir: 'myproj',
+      contextUsedPct: 42,
+      fiveHourPct: 20,
+      fiveHourResetsAt: Math.floor(now / 1000) + 3600,
+      sevenDayPct: 30,
+      sevenDayResetsAt: Math.floor(now / 1000) + 86400,
+    },
+  ]);
+  t.after(() => env.cleanup());
+
+  assert.ok(!env.mock.statusBarItem.tooltip.includes('5h from'));
+  assert.ok(!env.mock.statusBarItem.tooltip.includes('7d from'));
+});
+
+test('activate: tooltip credits the session actually feeding 5h/7d when it differs from the ctx session', (t) => {
+  const now = Date.now();
+  const env = setup(
+    [
+      // A terminal session in another project, still within both windows.
+      {
+        ts: now - 60_000,
+        sessionId: 'terminal-session',
+        dir: 'other-repo',
+        fiveHourPct: 55,
+        fiveHourResetsAt: Math.floor(now / 1000) + 3600,
+        sevenDayPct: 65,
+        sevenDayResetsAt: Math.floor(now / 1000) + 86400,
+      },
+      // The VS Code chat session for the current workspace: only reports ctx.
+      { ts: now, sessionId: 'vscode-session', dir: 'myproj', contextUsedPct: 10 },
+    ],
+    { workspaceDir: 'myproj' }
+  );
+  t.after(() => env.cleanup());
+
+  assert.match(env.mock.statusBarItem.text, /5h 55%/);
+  assert.match(env.mock.statusBarItem.text, /7d 65%/);
+  assert.match(env.mock.statusBarItem.tooltip, /5h from other-repo · #termin, updated/);
+  assert.match(env.mock.statusBarItem.tooltip, /7d from other-repo · #termin, updated/);
+});
+
 test('clearHistory: confirming wipes the file and shows a confirmation message', async (t) => {
   const env = setup([{ ts: Date.now(), sessionId: 's1', contextUsedPct: 10 }]);
   t.after(() => env.cleanup());
