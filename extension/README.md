@@ -24,6 +24,12 @@ npm run install-statusline
 
 Once installed, keep using Claude Code as normal — this extension picks up new samples via a file watcher (with a 30s poll as a fallback).
 
+### Known limitation: 5h/7d needs a terminal Claude Code session
+
+Rate limits (5h / 7d) are account-wide, so this extension shows whichever session most recently reported them — a terminal session in a completely different project can (and does) keep another project's rate-limit charts fresh. Watch the status bar tooltip / panel card for a "via `<session>`" note; that's this cross-session fallback in action, not a bug.
+
+What it can't work around: Claude Code's own **native VS Code extension** (Anthropic's embedded chat panel, not this one) does not appear to send populated `rate_limits` data to the status line hook the way a terminal-based `claude` session does. If you only ever use that embedded chat and never run `claude` in an actual terminal, the 5h/7d charts have no live source to read from and will sit on the last value they saw (or go blank once that window resets). **Run `claude` in a terminal at least occasionally** to keep 5h/7d live — the context-window chart isn't affected, since it's read straight from the current session regardless of interface.
+
 ## Run it locally (not published to the Marketplace)
 
 1. Open the `extension/` folder in VS Code.
