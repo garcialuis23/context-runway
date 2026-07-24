@@ -10,6 +10,10 @@ It reads the JSON Claude Code already sends to status line scripts (`context_win
 
 ![Status line showing context window and rate-limit usage](../docs/screenshots/statusline.png)
 
+The `loc` row, showing lines added/removed today and this week:
+
+![Status line showing the loc row with today/week lines added and removed](../docs/screenshots/lines.png)
+
 Requires Node.js >= 18.
 
 ## Install

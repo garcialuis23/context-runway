@@ -19,6 +19,10 @@ The VS Code panel, with history charts:
 
 ![VS Code panel with context window and rate-limit charts](docs/screenshots/panel.png)
 
+The `loc` row, showing lines added/removed today and this week:
+
+![Status line showing the loc row with today/week lines added and removed](docs/screenshots/lines.png)
+
 ## Requirements
 
 - Node.js >= 18
