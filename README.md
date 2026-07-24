@@ -29,6 +29,8 @@ The `loc` row, showing lines added/removed today and this week:
 - Claude Code (for the statusline)
 - VS Code >= 1.85 (for the extension, optional)
 
+> **Note:** the 5-hour/7-day rate-limit charts need at least one **terminal** `claude` session running the statusline. Claude Code's native VS Code extension (the embedded chat panel) doesn't appear to feed rate-limit data to the status line the way a terminal session does — see [`extension/README.md`](extension/README.md#known-limitation-5h7d-needs-a-terminal-claude-code-session). The context-window chart is unaffected.
+
 ## Quick start
 
 ```bash
