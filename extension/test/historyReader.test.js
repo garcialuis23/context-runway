@@ -118,6 +118,60 @@ test('formatTokenCount', async (t) => {
   });
 });
 
+test('summarizeLinesOfCode', async (t) => {
+  const { summarizeLinesOfCode } = loadHistoryReader();
+
+  await t.test('returns all zeros for empty history', () => {
+    const summary = summarizeLinesOfCode([], Date.now());
+    assert.deepEqual(summary, { today: { added: 0, removed: 0 }, week: { added: 0, removed: 0 } });
+  });
+
+  await t.test("counts a session's first-ever sample in full", () => {
+    const now = Date.now();
+    const history = [{ ts: now, sessionId: 's1', linesAdded: 42, linesRemoved: 3 }];
+    const summary = summarizeLinesOfCode(history, now);
+    assert.equal(summary.today.added, 42);
+    assert.equal(summary.today.removed, 3);
+  });
+
+  await t.test('sums deltas between consecutive snapshots and does not double count across sessions', () => {
+    const now = Date.now();
+    const history = [
+      { ts: now - 2000, sessionId: 's1', linesAdded: 10, linesRemoved: 0 },
+      { ts: now - 1000, sessionId: 's1', linesAdded: 25, linesRemoved: 5 }, // +15/+5
+      { ts: now, sessionId: 's2', linesAdded: 20, linesRemoved: 0 },
+    ];
+    const summary = summarizeLinesOfCode(history, now);
+    assert.equal(summary.today.added, 10 + 15 + 20);
+    assert.equal(summary.today.removed, 5);
+  });
+
+  await t.test('skips a negative delta instead of subtracting it', () => {
+    const now = Date.now();
+    const history = [
+      { ts: now - 2000, sessionId: 's1', linesAdded: 50 },
+      { ts: now - 1000, sessionId: 's1', linesAdded: 10 }, // counter went backwards
+    ];
+    const summary = summarizeLinesOfCode(history, now);
+    assert.equal(summary.today.added, 50);
+  });
+
+  await t.test('excludes deltas from before today but includes them in the week', () => {
+    const now = Date.now();
+    const midnight = new Date(now);
+    midnight.setHours(0, 0, 0, 0);
+    const yesterday = midnight.getTime() - 60 * 1000;
+
+    const history = [
+      { ts: yesterday, sessionId: 's1', linesAdded: 100 },
+      { ts: now, sessionId: 's1', linesAdded: 140 }, // +40 today
+    ];
+    const summary = summarizeLinesOfCode(history, now);
+    assert.equal(summary.today.added, 40);
+    assert.equal(summary.week.added, 140);
+  });
+});
+
 test('formatAgo', async (t) => {
   const { formatAgo } = loadHistoryReader();
 

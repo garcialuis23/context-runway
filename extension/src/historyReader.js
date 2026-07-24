@@ -66,6 +66,69 @@ function formatTokenCount(n) {
   return String(n);
 }
 
+// Mirrors statusline/src/lib/linesOfCode.js: cost.total_lines_added/removed
+// are cumulative *within a single session*, so summing raw totals across
+// sessions would double count. Instead we diff consecutive snapshots of the
+// same session and attribute each delta to the timestamp it happened at.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
+
+function deltasForSession(points, field) {
+  const deltas = [];
+  let prev = null;
+  for (const point of points) {
+    const cur = point[field];
+    if (typeof cur !== 'number') continue;
+    const delta = typeof prev === 'number' ? cur - prev : cur;
+    // Both counters only grow within a session; a negative delta means the
+    // counter went backwards (process restart or similar) rather than lines
+    // being "un-added", so skip it instead of dragging a bucket negative.
+    if (delta > 0) deltas.push({ ts: point.ts, delta });
+    prev = cur;
+  }
+  return deltas;
+}
+
+function sumSince(deltas, sinceMs) {
+  return deltas.filter((d) => d.ts >= sinceMs).reduce((sum, d) => sum + d.delta, 0);
+}
+
+// Summarizes lines-of-code changes across every session in `history` (every
+// Claude Code chat on this machine), bucketed into "today" (since local
+// midnight) and "this week" (rolling 7 days), so a long-running session that
+// spans the boundary still gets split correctly between buckets.
+function summarizeLinesOfCode(history, nowMs) {
+  const bySession = new Map();
+  for (const entry of history) {
+    if (typeof entry.linesAdded !== 'number' && typeof entry.linesRemoved !== 'number') continue;
+    if (!bySession.has(entry.sessionId)) bySession.set(entry.sessionId, []);
+    bySession.get(entry.sessionId).push(entry);
+  }
+
+  const midnight = new Date(nowMs);
+  midnight.setHours(0, 0, 0, 0);
+  const todaySinceMs = midnight.getTime();
+  const weekSinceMs = nowMs - WEEK_MS;
+
+  const summary = {
+    today: { added: 0, removed: 0 },
+    week: { added: 0, removed: 0 },
+  };
+
+  for (const points of bySession.values()) {
+    points.sort((a, b) => a.ts - b.ts);
+    const addedDeltas = deltasForSession(points, 'linesAdded');
+    const removedDeltas = deltasForSession(points, 'linesRemoved');
+
+    summary.today.added += sumSince(addedDeltas, todaySinceMs);
+    summary.today.removed += sumSince(removedDeltas, todaySinceMs);
+    summary.week.added += sumSince(addedDeltas, weekSinceMs);
+    summary.week.removed += sumSince(removedDeltas, weekSinceMs);
+  }
+
+  return summary;
+}
+
 // Same fallback order as statusline/src/lib/render.js.
 function formatAgo(ms) {
   if (ms < 60 * 1000) return 'just now';
@@ -82,6 +145,7 @@ module.exports = {
   readHistory,
   mostRecentWithField,
   sessionLabel,
+  summarizeLinesOfCode,
   formatTokenCount,
   formatAgo,
   HISTORY_FILE,

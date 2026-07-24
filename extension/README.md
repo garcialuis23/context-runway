@@ -4,6 +4,7 @@ A status bar item + panel that visualizes:
 
 - **Context window runway** for the current Claude Code session (line chart of context % used over the session).
 - **5-hour and 7-day rate-limit usage**, each as its own chart, with time-to-reset.
+- **Lines of code added/removed today and this week**, across every session on this machine (shown in the status bar tooltip and as a panel card once Claude Code starts sending cost data).
 
 Click the status bar item (or run **Context Runway: Show Usage Panel**) to open the full view.
 
