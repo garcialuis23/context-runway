@@ -43,6 +43,23 @@ code --install-extension context-runway-0.1.0.vsix
 
 See [`statusline/README.md`](statusline/README.md) and [`extension/README.md`](extension/README.md) for details.
 
+## Updating
+
+Neither piece auto-updates, and nothing is synced between machines — if you have this installed on more than one machine, repeat these steps on **each one** after pulling a new version:
+
+```bash
+git pull
+```
+
+- **statusline**: that's it. `~/.claude/settings.json` points straight at `statusline/src/index.js` in your clone, so the next Claude Code session picks up the change automatically. Only re-run `npm run install-statusline` if the update added a new setting or you see install-related errors; run `npm install` too if `package.json` changed.
+- **extension**: the VS Code extension is an installed `.vsix`, not read live from the repo, so a `git pull` alone does nothing for it. Rebuild and reinstall:
+
+  ```bash
+  cd extension
+  npm run package
+  code --install-extension context-runway-*.vsix --force
+  ```
+
 ## Contributing
 
 Contributions are welcome via pull request — see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -36,6 +36,18 @@ npm run package
 code --install-extension context-runway-0.1.0.vsix
 ```
 
+## Updating
+
+Unlike the statusline, this is an installed `.vsix`, not read live from the repo — a `git pull` alone changes nothing until you rebuild and reinstall:
+
+```bash
+git pull
+npm run package
+code --install-extension context-runway-*.vsix --force
+```
+
+If you have it installed on multiple machines, repeat this on each one — nothing syncs automatically.
+
 ## Telemetry
 
 Off by default, and inert even when turned on — there is currently no collection backend wired up, so nothing leaves your machine either way. It exists as scaffolding for a future release.

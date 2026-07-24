@@ -27,6 +27,10 @@ To remove it:
 npm run uninstall-statusline
 ```
 
+## Updating
+
+`~/.claude/settings.json` points straight at `src/index.js` inside this clone, so a plain `git pull` is enough to pick up a new version — no need to re-run the installer. The exceptions: `npm install` if `package.json` changed, or `npm run install-statusline` again if the update added a new setting. If you have this installed on multiple machines, none of this syncs automatically — repeat on each one.
+
 ## How it works
 
 - `src/index.js` is the entry point Claude Code invokes on stdin/stdout after each assistant message.
