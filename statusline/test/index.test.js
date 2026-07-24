@@ -258,6 +258,25 @@ test('a full payload renders ctx/5h/7d rows', () => {
   assert.ok(out.includes('42%'));
 });
 
+test('renders a loc row only once Claude Code sends cost data', () => {
+  const withoutCost = runStatusline({
+    input: { session_id: 'no-cost-session', context_window: { used_percentage: 10 } },
+  });
+  const outWithout = stripAnsi(withoutCost.stdout);
+  assert.ok(!outWithout.includes('loc '), `expected no loc row in:\n${outWithout}`);
+
+  const withCost = runStatusline({
+    input: {
+      session_id: 'cost-session',
+      context_window: { used_percentage: 10 },
+      cost: { total_lines_added: 128, total_lines_removed: 34 },
+    },
+  });
+  const outWith = stripAnsi(withCost.stdout);
+  assert.ok(outWith.includes('loc '), `expected a loc row in:\n${outWith}`);
+  assert.ok(outWith.includes('+128/-34'));
+});
+
 test('truncates an overly long session name and only shows a label when another session is recent', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-runway-index-test-'));
   try {

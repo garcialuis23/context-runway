@@ -4,6 +4,7 @@ A Claude Code status line that shows, at a glance:
 
 - **Context runway**: how much of the current conversation's context window is used, plus an estimate of how many turns are left at the current burn rate.
 - **Rate limits**: how much of your 5-hour and 7-day account usage windows are used, when each resets, and a burn-rate projection warning (⚠) if you're on pace to hit 100% before the window resets.
+- **Lines of code**: how many lines Claude Code has added/removed today and in the last 7 days, across every session on this machine. This is per-machine only — it's built from the local `usage-history.jsonl` log, not synced across machines or accounts.
 
 It reads the JSON Claude Code already sends to status line scripts (`context_window`, `rate_limits`) — no scraping, no extra API calls, no added token cost.
 
@@ -36,7 +37,8 @@ npm run uninstall-statusline
 - `src/index.js` is the entry point Claude Code invokes on stdin/stdout after each assistant message.
 - `src/lib/history.js` persists a throttled, rolling log of usage snapshots to `~/.claude/context-runway/usage-history.jsonl` (pruned to 9 days), so trends can be computed across turns and sessions.
 - `src/lib/projection.js` fits a simple slope to recent samples within the current rate-limit window and projects whether you'll exhaust it before it resets.
-- `src/lib/render.js` renders the progress bars, colors (green/yellow/red at 70%/90% thresholds), and durations.
+- `src/lib/linesOfCode.js` turns Claude Code's cumulative-per-session `cost.total_lines_added`/`total_lines_removed` counters into a today/this-week total across every session in the log, by diffing consecutive same-session snapshots rather than summing raw totals (which would double count).
+- `src/lib/render.js` renders the progress bars, colors (green/yellow/red at 70%/90% thresholds), durations, and the lines-of-code row.
 
 ## Try it without installing
 

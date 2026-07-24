@@ -2,7 +2,16 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { COLORS, colorForPct, renderBar, formatRow, formatTokenCount, formatDuration } = require('../../src/lib/render');
+const {
+  COLORS,
+  colorForPct,
+  renderBar,
+  formatRow,
+  formatTokenCount,
+  formatDuration,
+  formatLineDelta,
+  formatLocRow,
+} = require('../../src/lib/render');
 
 test('colorForPct picks red/yellow/green at the 90/70 thresholds', () => {
   assert.equal(colorForPct(0), COLORS.green);
@@ -80,4 +89,20 @@ test('formatRow rounds the percentage and appends a warning icon when warn is tr
 test('formatRow tolerates a missing extra string', () => {
   const row = formatRow('7d', 10);
   assert.ok(!row.includes('undefined'));
+});
+
+test('formatLineDelta colors added green and removed red', () => {
+  const delta = formatLineDelta(120, 15);
+  assert.equal(delta, `${COLORS.green}+120${COLORS.reset}/${COLORS.red}-15${COLORS.reset}`);
+});
+
+test('formatLocRow includes both today and week totals', () => {
+  const row = formatLocRow({ today: { added: 10, removed: 2 }, week: { added: 40, removed: 8 } });
+  assert.ok(row.includes('loc '));
+  assert.ok(row.includes('today'));
+  assert.ok(row.includes('+10'));
+  assert.ok(row.includes('-2'));
+  assert.ok(row.includes('week'));
+  assert.ok(row.includes('+40'));
+  assert.ok(row.includes('-8'));
 });
