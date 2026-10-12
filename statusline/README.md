@@ -89,7 +89,7 @@ Scheduling is Windows-only for now. On macOS and Linux, `schedule` records the f
 
 ## Updating
 
-`~/.claude/settings.json` points straight at the scripts inside this clone, so a plain `git pull` is usually enough to pick up a new version — no need to re-run the installer. The exceptions: `npm install` if `package.json` changed, or `npm run install-statusline` again if the update added a new setting. **The handoff-notes release did** (two new hooks), and so did the resume release (two more: `PostToolUse` and `StopFailure`), so run the installer once after pulling it, then start a new Claude Code session. If you have this installed on multiple machines, none of this syncs automatically — repeat on each one.
+`~/.claude/settings.json` points straight at the scripts inside this clone, so a plain `git pull` is usually enough to pick up a new version — no need to re-run the installer. The exceptions: `npm install` if `package.json` changed, or `npm run install-statusline` again if the update added a new setting. **0.2.0 did** (it registers four hooks: `UserPromptSubmit`, `PostToolUse`, `SessionStart` and `StopFailure`), so run the installer once after pulling it, then start a new Claude Code session. The [changelog](CHANGELOG.md) says which releases need this. If you have this installed on multiple machines, none of this syncs automatically — repeat on each one.
 
 ## How it works
 

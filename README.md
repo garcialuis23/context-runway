@@ -12,11 +12,12 @@ Visual tooling to see how much conversation/context "runway" you have left when 
 - **Rate limits** — 5-hour and 7-day account usage, when each resets, and a ⚠ warning if you're on pace to hit 100% before the reset.
 - **Lines of code** — lines Claude Code added/removed today and this week, across every session on the machine.
 - **Handoff notes** — when context reaches 80% (just before auto-compaction) or the 5-hour limit reaches 95%, Claude saves notes on where the work stands. The next new session in that project starts with them loaded and picks up where you left off. [How it works](statusline/README.md#handoff-notes).
+- **Resume after a usage limit** — if a limit cuts a session off mid-task, you get a one-click script to reopen it, or, if you opt in per project, it resumes by itself in the background once the limit resets (Windows). [How it works](statusline/README.md#resuming-after-a-usage-limit).
 - **History charts** — the VS Code extension shows all of the above over time.
 
 It's made of two pieces:
 
-- [`statusline/`](statusline/) — a Claude Code status line plus the handoff hooks. This is the core; everything else reads what it records.
+- [`statusline/`](statusline/) — a Claude Code status line plus the handoff and resume hooks. This is the core; everything else reads what it records.
 - [`extension/`](extension/) — an optional companion VS Code extension with a status bar item and a webview panel with history charts, reading the same data the statusline writes.
 
 ## Screenshots
@@ -65,7 +66,7 @@ Neither piece auto-updates, and nothing is synced between machines — usage his
 git pull
 ```
 
-- **statusline**: usually that's it. `~/.claude/settings.json` points straight at the scripts in your clone, so the next Claude Code session picks up code changes automatically. Re-run `npm run install-statusline` only when an update adds a new setting — as the handoff-notes release did (it registers two new hooks), so run it once on each machine after pulling that version:
+- **statusline**: usually that's it. `~/.claude/settings.json` points straight at the scripts in your clone, so the next Claude Code session picks up code changes automatically. Re-run `npm run install-statusline` only when an update adds a new setting — as statusline 0.2.0 did (it registers the handoff and resume hooks), so run it once on each machine after pulling it. Each [changelog](statusline/CHANGELOG.md) entry says when a reinstall is needed:
 
   ```bash
   cd statusline
