@@ -4,10 +4,20 @@
 [![CodeQL](https://github.com/garcialuis23/context-runway/actions/workflows/codeql.yml/badge.svg)](https://github.com/garcialuis23/context-runway/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Visual tooling to see how much conversation/context "runway" you have left when working with Claude Code — tokens remaining in the current context window, and how close you are to your account's hourly/weekly usage limits.
+Visual tooling to see how much conversation/context "runway" you have left when working with Claude Code — tokens remaining in the current context window, and how close you are to your account's hourly/weekly usage limits — and to not lose your place when you run out.
 
-- [`statusline/`](statusline/) — a Claude Code status line showing context window usage and rate-limit burn-rate projections.
-- [`extension/`](extension/) — a companion VS Code extension with a status bar item and a webview panel with history charts, reading the same data the statusline writes.
+## Features
+
+- **Context runway** — how full the current conversation's context window is, and roughly how many turns are left at your current pace.
+- **Rate limits** — 5-hour and 7-day account usage, when each resets, and a ⚠ warning if you're on pace to hit 100% before the reset.
+- **Lines of code** — lines Claude Code added/removed today and this week, across every session on the machine.
+- **Handoff notes** — when context reaches 80% (just before auto-compaction) or the 5-hour limit reaches 95%, Claude saves notes on where the work stands. The next new session in that project starts with them loaded and picks up where you left off. [How it works](statusline/README.md#handoff-notes).
+- **History charts** — the VS Code extension shows all of the above over time.
+
+It's made of two pieces:
+
+- [`statusline/`](statusline/) — a Claude Code status line plus the handoff hooks. This is the core; everything else reads what it records.
+- [`extension/`](extension/) — an optional companion VS Code extension with a status bar item and a webview panel with history charts, reading the same data the statusline writes.
 
 ## Screenshots
 
@@ -39,6 +49,8 @@ cd context-runway/statusline
 npm run install-statusline
 ```
 
+This sets up both the status line and the handoff hooks in `~/.claude/settings.json` (backing it up first). Start a new Claude Code session to see it.
+
 Then, for the richer VS Code view:
 
 ```bash
@@ -51,13 +63,20 @@ See [`statusline/README.md`](statusline/README.md) and [`extension/README.md`](e
 
 ## Updating
 
-Neither piece auto-updates, and nothing is synced between machines — if you have this installed on more than one machine, repeat these steps on **each one** after pulling a new version:
+Neither piece auto-updates, and nothing is synced between machines — usage history and handoff notes stay on the machine that wrote them. If you have this installed on more than one machine, repeat these steps on **each one** after pulling a new version:
 
 ```bash
 git pull
 ```
 
-- **statusline**: that's it. `~/.claude/settings.json` points straight at `statusline/src/index.js` in your clone, so the next Claude Code session picks up the change automatically. Only re-run `npm run install-statusline` if the update added a new setting or you see install-related errors; run `npm install` too if `package.json` changed.
+- **statusline**: usually that's it. `~/.claude/settings.json` points straight at the scripts in your clone, so the next Claude Code session picks up code changes automatically. Re-run `npm run install-statusline` only when an update adds a new setting — as the handoff-notes release did (it registers two new hooks), so run it once on each machine after pulling that version:
+
+  ```bash
+  cd statusline
+  npm run install-statusline
+  ```
+
+  Then start a new Claude Code session; sessions that were already open keep their old settings.
 - **extension**: the VS Code extension is an installed `.vsix`, not read live from the repo, so a `git pull` alone does nothing for it. Rebuild and reinstall:
 
   ```bash

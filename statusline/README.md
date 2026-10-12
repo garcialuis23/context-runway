@@ -5,10 +5,9 @@ A Claude Code status line that shows, at a glance:
 - **Context runway**: how much of the current conversation's context window is used, plus an estimate of how many turns are left at the current burn rate.
 - **Rate limits**: how much of your 5-hour and 7-day account usage windows are used, when each resets, and a burn-rate projection warning (⚠) if you're on pace to hit 100% before the window resets.
 - **Lines of code**: how many lines Claude Code has added/removed today and in the last 7 days, across every session on this machine. This is per-machine only — it's built from the local `usage-history.jsonl` log, not synced across machines or accounts.
+- **Handoff notes**: when the conversation's context window reaches 80% or your 5-hour limit reaches 95%, Claude saves notes on where the work stands, and the next new session in that project starts with them loaded. See [Handoff notes](#handoff-notes).
 
-- **Handoff notes**: when the conversation's context window reaches 80% (before Claude Code auto-compacts it) or your 5-hour limit reaches 95%, Claude is asked to save notes on where the work stands — goal, what's done, what's in progress, next steps, key files. The next new session in that project starts with those notes already loaded, so it can pick up where the last one stopped.
-
-It reads the JSON Claude Code already sends to status line scripts (`context_window`, `rate_limits`) — no scraping, no extra API calls, no added token cost.
+The status line reads the JSON Claude Code already sends to status line scripts (`context_window`, `rate_limits`) — no scraping, no extra API calls, no added token cost. The only token cost is the handoff notes themselves: Claude writing them once near a limit, and reading them at the start of the next session.
 
 ![Status line showing context window and rate-limit usage](../docs/screenshots/statusline.png)
 
@@ -34,9 +33,28 @@ To remove it:
 npm run uninstall-statusline
 ```
 
+## Handoff notes
+
+Running out of context or hitting the 5-hour limit used to mean re-explaining everything in the next chat. Now, near either limit, Claude writes down where things stand, and the next session reads it back.
+
+**When notes are written.** On each message you send, a hook checks the latest usage the status line recorded:
+
+| Limit | Threshold | Asked again |
+| --- | --- | --- |
+| Context window (this conversation) | 80% | Only after usage drops back, e.g. after a compaction |
+| 5-hour limit (whole account) | 95% | Once per 5-hour window |
+
+The first time a limit crosses its threshold, Claude is asked to save notes as part of its reply, with these sections: **Goal**, **Done**, **In progress**, **Next steps**, **Key files** and **Open questions**. It mentions in the reply that it saved them. The context threshold is 80% rather than 95% because Claude Code auto-compacts at around 85%, and usage data lags one message behind.
+
+**When notes are read.** When you start a new session in the same project (or run `/clear`, or the conversation gets compacted), the notes are loaded into it automatically, so you can just say "carry on". Each version of the notes is loaded once, so later sessions aren't flooded with stale context, and notes older than 7 days are ignored. Resuming an existing conversation (`claude --resume`) skips them, since that conversation is already there.
+
+**Where they live.** `~/.claude/context-runway/handoffs/<project>-<hash>.md`, one file per project folder, overwritten each time. They're plain Markdown: open them to see what was saved, edit them, or delete them to start fresh. They're kept outside your project so they never end up in a commit, and they stay on the machine that wrote them.
+
+The first time Claude writes notes it may ask permission to write to that folder, since it's outside your project.
+
 ## Updating
 
-`~/.claude/settings.json` points straight at `src/index.js` inside this clone, so a plain `git pull` is enough to pick up a new version — no need to re-run the installer. The exceptions: `npm install` if `package.json` changed, or `npm run install-statusline` again if the update added a new setting. If you have this installed on multiple machines, none of this syncs automatically — repeat on each one.
+`~/.claude/settings.json` points straight at the scripts inside this clone, so a plain `git pull` is usually enough to pick up a new version — no need to re-run the installer. The exceptions: `npm install` if `package.json` changed, or `npm run install-statusline` again if the update added a new setting. **The handoff-notes release did** (two new hooks), so run the installer once after pulling it, then start a new Claude Code session. If you have this installed on multiple machines, none of this syncs automatically — repeat on each one.
 
 ## How it works
 
