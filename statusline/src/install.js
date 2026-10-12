@@ -14,10 +14,13 @@ const INDEX_PATH = path.resolve(__dirname, 'index.js').split(path.sep).join('/')
 const HANDOFF_PATH = path.resolve(__dirname, 'handoff.js').split(path.sep).join('/');
 
 // Hook events used by handoff.js, with the mode argument each one passes.
-// SessionStart skips 'resume' (that conversation is already loaded).
+// SessionStart skips 'resume' (that conversation is already loaded), and
+// StopFailure only matters when a usage limit ended the turn.
 const HANDOFF_HOOKS = [
   { event: 'UserPromptSubmit', mode: 'prompt' },
+  { event: 'PostToolUse', mode: 'tool' },
   { event: 'SessionStart', mode: 'start', matcher: 'startup|clear|compact' },
+  { event: 'StopFailure', mode: 'stopfail', matcher: 'rate_limit' },
 ];
 
 // Drops any context-runway handoff hooks already in settings (so re-running
@@ -98,7 +101,7 @@ function main() {
 
   console.log(`${alreadyInstalled ? 'Updated' : 'Installed'} statusLine in ${SETTINGS_PATH}`);
   console.log(`  command: node "${INDEX_PATH}"`);
-  console.log(`Installed handoff hooks (UserPromptSubmit, SessionStart): node "${HANDOFF_PATH}"`);
+  console.log(`Installed handoff hooks (${HANDOFF_HOOKS.map((h) => h.event).join(', ')}): node "${HANDOFF_PATH}"`);
   if (backupPath) console.log(`Previous settings backed up to ${backupPath}`);
   console.log('\nRestart Claude Code (or start a new session) to see it take effect.');
 }

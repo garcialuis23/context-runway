@@ -3,21 +3,31 @@
 
 // Claude Code hook entry point for session handoff notes.
 //
-//   node handoff.js prompt   (UserPromptSubmit) — when the context window or
-//                            the 5-hour limit is nearly used up, asks Claude to
-//                            write handoff notes for this project.
+//   node handoff.js prompt   (UserPromptSubmit) and
+//   node handoff.js tool     (PostToolUse) — when the context window or the
+//                            5-hour limit is nearly used up, asks Claude to
+//                            write handoff notes for this project. The tool
+//                            hook covers long tasks that send no new prompts.
 //   node handoff.js start    (SessionStart) — feeds the latest handoff notes
 //                            for this project into a fresh session.
+//   node handoff.js stopfail (StopFailure, rate_limit) — a usage limit cut the
+//                            session off: leaves a resume script and, if the
+//                            project opts in, schedules a resume for when the
+//                            limit resets (see lib/resume.js).
+//   node handoff.js run-resume <plan>  — what that scheduled task runs.
+//   node handoff.js status   — prints what was scheduled, launched or skipped.
 //
 // The statusline is the only writer of usage-history.jsonl; this script just
 // reads it, so it knows usage as of the last assistant message. Hooks must
 // never break a prompt, so every failure path exits 0 with no output.
 
 const fs = require('fs');
-const crypto = require('crypto');
 const path = require('path');
 const { readHistory, STATE_DIR } = require('./lib/history');
 const { formatDuration } = require('./lib/render');
+const { loadProjectConfig } = require('./lib/config');
+const { projectSlug } = require('./lib/project');
+const resume = require('./lib/resume');
 
 // Claude Code auto-compacts somewhere around 85% (see AUTO_COMPACTION_PRIOR_PCT
 // in index.js), and usage data lags one turn behind, so ask early enough to
@@ -34,7 +44,7 @@ const MAX_NOTES_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const MAX_TRACKED_SESSIONS = 50;
 
-const HANDOFF_DIR =path.join(STATE_DIR, 'handoffs');
+const HANDOFF_DIR = path.join(STATE_DIR, 'handoffs');
 const STATE_FILE = path.join(STATE_DIR, 'handoff-state.json');
 
 function readStdin() {
@@ -50,10 +60,7 @@ function readStdin() {
 // One notes file per project directory, readable at a glance, without ever
 // writing into the project itself (where it could get committed by accident).
 function handoffPathFor(cwd, baseDir = HANDOFF_DIR) {
-  const normalized = path.resolve(cwd || '.').replace(/\\/g, '/').toLowerCase();
-  const name = path.basename(normalized).replace(/[^a-z0-9._-]/g, '_') || 'root';
-  const hash = crypto.createHash('sha1').update(normalized).digest('hex').slice(0, 8);
-  return path.join(baseDir, `${name}-${hash}.md`).split(path.sep).join('/');
+  return path.join(baseDir, `${projectSlug(cwd)}.md`).split(path.sep).join('/');
 }
 
 function readState() {
@@ -124,13 +131,24 @@ function describeReason(r) {
   return `the account's 5-hour usage limit is at ${Math.round(r.pct)}%${reset}`;
 }
 
+function describeResumeMode(mode) {
+  if (mode === 'schedule') {
+    return 'If the limit cuts this session off, context-runway will resume it in the background once the limit resets, working from these notes, so make "In progress" and "Next steps" precise enough to continue unattended.';
+  }
+  if (mode === 'script') {
+    return 'If the limit cuts this session off, context-runway will leave a script that resumes it, so make "In progress" and "Next steps" precise enough to continue from.';
+  }
+  return null;
+}
+
 // Phrased as facts about the user's setup rather than bare commands, which
-// Claude Code recommends for hook context.
-function buildRequestContext(reasons, notesPath) {
-  return [
+// Claude Code recommends for hook context. `config` comes from the project's
+// .context-runway.json (see lib/config.js).
+function buildRequestContext(reasons, notesPath, config = {}) {
+  const lines = [
     `context-runway: ${reasons.map(describeReason).join(', and ')}.`,
     'The user installed context-runway so that, at this point, Claude saves handoff notes that let a future session pick up exactly where this one stops.',
-    `Along with answering this message, write those notes to ${notesPath} (overwrite the file; create its folder if needed), using these sections:`,
+    `Along with continuing the current work, write those notes to ${notesPath} (overwrite the file; create its folder if needed), using these sections:`,
     '## Goal — what the user is trying to achieve overall',
     '## Done — what has been completed so far, with key decisions and why',
     '## In progress — what was being worked on right now, and its current state',
@@ -138,7 +156,15 @@ function buildRequestContext(reasons, notesPath) {
     '## Key files — paths that matter, and what each is for',
     '## Open questions — anything unresolved or waiting on the user',
     'Keep it under 1,500 words, and mention briefly in your reply that the notes were saved.',
-  ].join('\n');
+  ];
+  if (reasons.some((r) => r.kind === 'fiveHour')) {
+    const resumeLine = describeResumeMode(config.resume);
+    if (resumeLine) lines.push(resumeLine);
+  }
+  if (config.extraInstructions) {
+    lines.push(`The project's .context-runway.json also asks for this when saving handoff notes: ${config.extraInstructions}`);
+  }
+  return lines.join('\n');
 }
 
 function buildResumeContext(notes, notesPath, ageMs) {
@@ -155,7 +181,9 @@ function emit(hookEventName, additionalContext) {
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } }) + '\n');
 }
 
-function onPrompt(input, nowMs) {
+// Shared by the prompt and tool hooks: same thresholds, same once-per-crossing
+// bookkeeping, so whichever fires first asks and the other stays quiet.
+function onUsageCheck(input, nowMs, hookEventName) {
   const sessionId = input.session_id;
   if (!sessionId) return;
 
@@ -171,41 +199,178 @@ function onPrompt(input, nowMs) {
   }
   writeState(state);
 
-  if (reasons.length > 0) emit('UserPromptSubmit', buildRequestContext(reasons, handoffPathFor(input.cwd)));
+  if (reasons.length > 0) {
+    emit(hookEventName, buildRequestContext(reasons, handoffPathFor(input.cwd), loadProjectConfig(input.cwd)));
+  }
+}
+
+// Tells the next session in this project about a resume that ran in the
+// background, once, so the user knows where to look.
+function describeLaunchedResume(cwd) {
+  const { planPath } = resume.pathsFor(cwd);
+  const plan = resume.readPlan(planPath);
+  if (!plan || plan.status !== 'launched' || plan.announced) return null;
+  plan.announced = true;
+  resume.writePlan(planPath, plan);
+  return [
+    `context-runway: after the usage limit reset, session ${plan.sessionId} was resumed in the background at ${new Date(plan.launchedAt).toLocaleString()} (background id ${plan.bgId}).`,
+    `The user can follow it with \`claude attach ${plan.bgId}\` or \`claude logs ${plan.bgId}\`, and see the full history with \`node "${__filename.split(path.sep).join('/')}" status\`. Mention this to the user.`,
+  ].join('\n');
 }
 
 // Delivers each version of the notes once per project, so they show up in
 // the next session after being written instead of in every session forever.
-function onStart(input, nowMs) {
-  if (input.source === 'resume') return; // the conversation is already there
-
-  const notesPath = handoffPathFor(input.cwd);
+function readFreshNotes(cwd, nowMs) {
+  const notesPath = handoffPathFor(cwd);
   let stat;
   try {
     stat = fs.statSync(notesPath);
   } catch {
-    return;
+    return null;
   }
   const ageMs = nowMs - stat.mtimeMs;
-  if (ageMs > MAX_NOTES_AGE_MS) return;
+  if (ageMs > MAX_NOTES_AGE_MS) return null;
 
   const state = readState();
-  if (state.delivered[notesPath] >= stat.mtimeMs) return;
+  if (state.delivered[notesPath] >= stat.mtimeMs) return null;
 
   const notes = fs.readFileSync(notesPath, 'utf8');
-  if (!notes.trim()) return;
+  if (!notes.trim()) return null;
 
   state.delivered[notesPath] = stat.mtimeMs;
   writeState(state);
-  emit('SessionStart', buildResumeContext(notes, notesPath, ageMs));
+  return buildResumeContext(notes, notesPath, ageMs);
+}
+
+function onStart(input, nowMs) {
+  if (input.source === 'resume') return; // the conversation is already there
+
+  const parts = [describeLaunchedResume(input.cwd), readFreshNotes(input.cwd, nowMs)].filter(Boolean);
+  if (parts.length > 0) emit('SessionStart', parts.join('\n\n'));
+}
+
+// StopFailure is fire-and-forget (Claude Code ignores its output), so this
+// only leaves things behind: a resume script, maybe a scheduled task, and a
+// log entry either way.
+function onStopFailure(input, nowMs) {
+  if (input.error !== 'rate_limit' || !input.session_id || !input.cwd) return;
+
+  const config = loadProjectConfig(input.cwd);
+  if (config.resume === 'off') return;
+
+  const history = readHistory();
+  const { planPath, scriptPath, taskName } = resume.pathsFor(input.cwd);
+  const plan = {
+    sessionId: input.session_id,
+    cwd: input.cwd,
+    createdAt: nowMs,
+    mode: config.resume,
+    runAt: resume.pickResumeAt(history, nowMs),
+    permissionMode: config.permissionMode,
+    prompt: config.resumePrompt,
+    contextTokens: resume.latestContextTokens(history, input.session_id),
+    scriptPath,
+    taskName,
+    status: 'script',
+  };
+
+  fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+  fs.writeFileSync(scriptPath, resume.buildScript(plan), { mode: 0o755 });
+
+  if (config.resume === 'schedule') {
+    if (plan.runAt == null) {
+      plan.status = 'schedule-failed';
+      plan.error = 'reset time unknown (no rate-limit data from the status line yet)';
+    } else {
+      const result = resume.scheduleTask({ taskName, runAtMs: plan.runAt, planPath });
+      plan.status = result.ok ? 'scheduled' : 'schedule-failed';
+      if (!result.ok) plan.error = result.error;
+    }
+  }
+
+  resume.writePlan(planPath, plan);
+  resume.appendLog({
+    ts: nowMs,
+    event: plan.status,
+    sessionId: plan.sessionId,
+    cwd: plan.cwd,
+    runAt: plan.runAt,
+    scriptPath,
+    ...(plan.error && { error: plan.error }),
+  });
+}
+
+// Run by the scheduled task. Re-checks everything, because hours may have
+// passed: the user may have resumed by hand, or the plan may be stale.
+function runResume(planPath, nowMs) {
+  const plan = resume.readPlan(planPath);
+  if (!plan || plan.status !== 'scheduled') return;
+
+  const log = (event, extra = {}) =>
+    resume.appendLog({ ts: nowMs, event, sessionId: plan.sessionId, cwd: plan.cwd, ...extra });
+
+  if (plan.runAt != null && nowMs < plan.runAt - resume.EARLY_TOLERANCE_MS) {
+    log('skipped', { reason: 'task ran before the limit reset; left scheduled' });
+    return;
+  }
+
+  resume.unscheduleTask(plan.taskName);
+
+  if (resume.sessionMovedOn(readHistory(), plan)) {
+    Object.assign(plan, { status: 'skipped', skippedAt: nowMs, reason: 'the session already continued' });
+    resume.writePlan(planPath, plan);
+    log('skipped', { reason: plan.reason });
+    return;
+  }
+
+  const result = resume.launchClaude(plan);
+  if (result.ok) {
+    Object.assign(plan, { status: 'launched', launchedAt: nowMs, bgId: result.bgId });
+    log('launched', { bgId: result.bgId });
+  } else {
+    Object.assign(plan, { status: 'launch-failed', error: result.error });
+    log('launch-failed', { error: result.error });
+  }
+  resume.writePlan(planPath, plan);
+}
+
+const STATUS_HINTS = {
+  script: (e) => `run ${e.scriptPath} to resume`,
+  scheduled: (e) => `will resume at ${new Date(e.runAt).toLocaleString()}`,
+  'schedule-failed': (e) => `could not schedule (${e.error}); run ${e.scriptPath} instead`,
+  launched: (e) => `follow it: claude attach ${e.bgId}  |  claude logs ${e.bgId}`,
+  'launch-failed': (e) => `claude did not start (${e.error})`,
+  skipped: (e) => e.reason,
+};
+
+function formatStatus(entries) {
+  if (entries.length === 0) return 'context-runway: no resumes recorded yet.';
+  return [
+    'context-runway resume log (newest last):',
+    ...entries.map((e) => {
+      const hint = STATUS_HINTS[e.event]?.(e) ?? '';
+      return `  ${new Date(e.ts).toLocaleString()}  ${e.event.padEnd(15)} ${path.basename(e.cwd || '')}  ${hint}`;
+    }),
+  ].join('\n');
 }
 
 async function main() {
+  const mode = process.argv[2];
+  // Not hooks: run by hand or by Task Scheduler, with nothing on stdin.
+  if (mode === 'status') {
+    console.log(formatStatus(resume.readLog().slice(-20)));
+    return;
+  }
   try {
+    if (mode === 'run-resume') {
+      runResume(process.argv[3], Date.now());
+      return;
+    }
     const input = JSON.parse(await readStdin());
-    const mode = process.argv[2];
-    if (mode === 'prompt') onPrompt(input, Date.now());
+    if (mode === 'prompt') onUsageCheck(input, Date.now(), 'UserPromptSubmit');
+    else if (mode === 'tool') onUsageCheck(input, Date.now(), 'PostToolUse');
     else if (mode === 'start') onStart(input, Date.now());
+    else if (mode === 'stopfail') onStopFailure(input, Date.now());
   } catch {
     // Never let a hook failure get in the way of the user's prompt.
   }
@@ -220,6 +385,7 @@ module.exports = {
   buildRequestContext,
   buildResumeContext,
   handoffPathFor,
+  formatStatus,
   CONTEXT_THRESHOLD_PCT,
   FIVE_HOUR_THRESHOLD_PCT,
 };
