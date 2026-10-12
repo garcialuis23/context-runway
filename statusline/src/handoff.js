@@ -188,6 +188,7 @@ function onUsageCheck(input, nowMs, hookEventName) {
   if (!sessionId) return;
 
   const state = readState();
+  const before = JSON.stringify(state);
   const { reasons, requested } = evaluateTriggers(readHistory(), sessionId, nowMs, state.requested[sessionId]);
   // Re-insert so the most recently active sessions sit last, then keep only
   // those, so the state file doesn't grow with every session ever opened.
@@ -197,7 +198,8 @@ function onUsageCheck(input, nowMs, hookEventName) {
   for (const id of sessionIds.slice(0, Math.max(0, sessionIds.length - MAX_TRACKED_SESSIONS))) {
     delete state.requested[id];
   }
-  writeState(state);
+  // This runs after every tool call, so skip the write when nothing changed.
+  if (JSON.stringify(state) !== before) writeState(state);
 
   if (reasons.length > 0) {
     emit(hookEventName, buildRequestContext(reasons, handoffPathFor(input.cwd), loadProjectConfig(input.cwd)));
@@ -212,9 +214,12 @@ function describeLaunchedResume(cwd) {
   if (!plan || plan.status !== 'launched' || plan.announced) return null;
   plan.announced = true;
   resume.writePlan(planPath, plan);
+  const follow = plan.bgId
+    ? `\`claude attach ${plan.bgId}\` or \`claude logs ${plan.bgId}\``
+    : '`claude agents`';
   return [
-    `context-runway: after the usage limit reset, session ${plan.sessionId} was resumed in the background at ${new Date(plan.launchedAt).toLocaleString()} (background id ${plan.bgId}).`,
-    `The user can follow it with \`claude attach ${plan.bgId}\` or \`claude logs ${plan.bgId}\`, and see the full history with \`node "${__filename.split(path.sep).join('/')}" status\`. Mention this to the user.`,
+    `context-runway: after the usage limit reset, session ${plan.sessionId} was resumed in the background at ${new Date(plan.launchedAt).toLocaleString()}${plan.bgId ? ` (background id ${plan.bgId})` : ''}.`,
+    `The user can follow it with ${follow}, and see the full history with \`node "${__filename.split(path.sep).join('/')}" status\`. Mention this to the user.`,
   ].join('\n');
 }
 
@@ -310,7 +315,11 @@ function runResume(planPath, nowMs) {
     resume.appendLog({ ts: nowMs, event, sessionId: plan.sessionId, cwd: plan.cwd, ...extra });
 
   if (plan.runAt != null && nowMs < plan.runAt - resume.EARLY_TOLERANCE_MS) {
-    log('skipped', { reason: 'task ran before the limit reset; left scheduled' });
+    // The trigger is one-off, so register it again or it would never fire.
+    const result = resume.scheduleTask({ taskName: plan.taskName, runAtMs: plan.runAt, planPath });
+    log('skipped', {
+      reason: result.ok ? 'task ran before the limit reset; rescheduled' : `task ran early and could not be rescheduled (${result.error})`,
+    });
     return;
   }
 
@@ -338,7 +347,7 @@ const STATUS_HINTS = {
   script: (e) => `run ${e.scriptPath} to resume`,
   scheduled: (e) => `will resume at ${new Date(e.runAt).toLocaleString()}`,
   'schedule-failed': (e) => `could not schedule (${e.error}); run ${e.scriptPath} instead`,
-  launched: (e) => `follow it: claude attach ${e.bgId}  |  claude logs ${e.bgId}`,
+  launched: (e) => (e.bgId ? `follow it: claude attach ${e.bgId}  |  claude logs ${e.bgId}` : 'follow it: claude agents'),
   'launch-failed': (e) => `claude did not start (${e.error})`,
   skipped: (e) => e.reason,
 };

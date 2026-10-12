@@ -33,6 +33,9 @@ const RESET_GRACE_MS = 2 * 60 * 1000;
 // A task that fires this early (clock changes, manual "Run") does nothing.
 const EARLY_TOLERANCE_MS = 60 * 1000;
 
+// How long after the hook the cut-off turn's samples may still arrive.
+const SETTLE_MS = 3 * 60 * 1000;
+
 const MAX_LOG_LINES = 200;
 
 function pathsFor(cwd, baseDir = RESUME_DIR) {
@@ -80,12 +83,21 @@ function latestContextTokens(history, sessionId) {
 
 // The status line keeps sampling an idle session every minute, so a new
 // sample alone means nothing; a changed token count means the conversation
-// moved on (someone already resumed it, or it was compacted).
+// moved on (someone already resumed it, or it was compacted). It also
+// throttles samples, so the final count of the turn the limit cut off often
+// lands a little after the hook ran: samples within SETTLE_MS only update the
+// baseline, and only a change after that counts.
 function sessionMovedOn(history, plan) {
   if (typeof plan.contextTokens !== 'number') return false;
-  return history.some(
-    (e) => e.sessionId === plan.sessionId && e.ts > plan.createdAt && typeof e.contextTokens === 'number' && e.contextTokens !== plan.contextTokens
-  );
+  const later = history
+    .filter((e) => e.sessionId === plan.sessionId && e.ts > plan.createdAt && typeof e.contextTokens === 'number')
+    .sort((a, b) => a.ts - b.ts);
+  let baseline = plan.contextTokens;
+  for (const e of later) {
+    if (e.ts <= plan.createdAt + SETTLE_MS) baseline = e.contextTokens;
+    else if (e.contextTokens !== baseline) return true;
+  }
+  return false;
 }
 
 // Arguments are quoted for the platform's shell. On Windows the characters
@@ -102,10 +114,12 @@ function quoteArg(value, platform = process.platform) {
 function buildScript({ cwd, sessionId, prompt }, platform = process.platform) {
   const q = (v) => quoteArg(v, platform);
   if (platform === 'win32') {
+    // Inside a .cmd file % must be doubled rather than dropped, or a folder
+    // name containing it would point somewhere else. Paths can't contain ".
     return [
       '@echo off',
       'rem Written by context-runway: resumes the Claude Code session a usage limit interrupted.',
-      `cd /d ${q(cwd)}`,
+      `cd /d "${String(cwd).replace(/%/g, '%%')}"`,
       `claude --resume ${q(sessionId)} ${q(prompt)}`,
       '',
     ].join('\r\n');
@@ -228,8 +242,10 @@ function launchClaude(plan) {
       ? spawnSync(`${bin} ${args.map((a) => quoteArg(a, 'win32')).join(' ')}`, { ...opts, shell: true })
       : spawnSync(bin, args, opts);
   const output = `${result.stdout || ''}${result.stderr || ''}`;
-  const bgId = output.match(/backgrounded\s*·\s*([0-9a-f]{6,})/i)?.[1] ?? null;
-  if (result.status === 0 && bgId) return { ok: true, bgId };
+  // "backgrounded · 7c5dcf5d · <name>". A clean exit means the session
+  // started even if the id can't be read (say, a console mangling the ·).
+  const bgId = output.match(/backgrounded\W+([0-9a-f]{6,})/i)?.[1] ?? null;
+  if (result.status === 0) return { ok: true, bgId };
   return { ok: false, error: (output || result.error?.message || 'no output').trim().slice(0, 300) };
 }
 
@@ -252,4 +268,5 @@ module.exports = {
   RESUME_LOG,
   RESET_GRACE_MS,
   EARLY_TOLERANCE_MS,
+  SETTLE_MS,
 };

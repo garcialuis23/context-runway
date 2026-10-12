@@ -189,7 +189,11 @@ test('run-resume skips a session the user already continued', () => {
     runScript(['stopfail'], { input: { session_id: 's1', cwd, error: 'rate_limit' }, stateDir: dir, env });
 
     fs.writeFileSync(files.plan, JSON.stringify({ ...readJson(files.plan), runAt: Date.now() - 1000 }));
-    fs.appendFileSync(path.join(dir, 'usage-history.jsonl'), JSON.stringify({ sessionId: 's1', ts: Date.now() + 1000, contextTokens: 900 }) + '\n');
+    // The user resumed it by hand: new tokens well after the settle window.
+    fs.appendFileSync(
+      path.join(dir, 'usage-history.jsonl'),
+      JSON.stringify({ sessionId: 's1', ts: Date.now() + 10 * 60 * 1000, contextTokens: 900 }) + '\n'
+    );
 
     runScript(['run-resume', files.plan], { stateDir: dir, env });
     assert.equal(readJson(files.plan).status, 'skipped');
@@ -208,6 +212,34 @@ test('run-resume leaves the plan scheduled if the task fires before the reset', 
     runScript(['run-resume', files.plan], { stateDir: dir, env });
     assert.equal(readJson(files.plan).status, 'scheduled');
     assert.equal(fs.existsSync(path.join(dir, 'claude-args.json')), false);
+
+    // The one-off trigger already fired, so it has to be registered again.
+    const requests = readJsonLines(path.join(dir, 'scheduler.jsonl'));
+    assert.deepEqual(
+      requests.map((r) => r.action),
+      ['schedule', 'schedule']
+    );
+    assert.equal(requests[1].runAtMs, readJson(files.plan).runAt);
+  });
+});
+
+test("run-resume still launches when the cut-off turn's final sample lands late", () => {
+  withTempDir((dir) => {
+    const cwd = makeProject(dir, { resume: 'schedule' });
+    const files = resumeFiles(dir, cwd);
+    const env = testEnv(dir);
+    writeHistory(dir, [{ sessionId: 's1', ts: Date.now() - 5000, contextTokens: 500, fiveHourPct: 100, fiveHourResetsAt: inOneHour() }]);
+    runScript(['stopfail'], { input: { session_id: 's1', cwd, error: 'rate_limit' }, stateDir: dir, env });
+
+    // The throttled status line records the turn's final count just after the hook.
+    fs.appendFileSync(
+      path.join(dir, 'usage-history.jsonl'),
+      JSON.stringify({ sessionId: 's1', ts: Date.now() + 20000, contextTokens: 640 }) + '\n'
+    );
+    fs.writeFileSync(files.plan, JSON.stringify({ ...readJson(files.plan), runAt: Date.now() - 1000 }));
+
+    runScript(['run-resume', files.plan], { stateDir: dir, env });
+    assert.equal(readJson(files.plan).status, 'launched');
   });
 });
 

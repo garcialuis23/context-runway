@@ -75,7 +75,7 @@ When the 5-hour (or 7-day) limit cuts a session off mid-turn, Claude Code fires 
 - `extraInstructions` is added to the request for handoff notes, for project-specific bookkeeping (a work log, a docs folder…).
 - Missing or invalid values fall back to the defaults, so a typo never breaks the hooks.
 
-**The scheduled task checks again before launching**, since hours may have passed. If the conversation already moved on (you resumed it yourself), it does nothing. If it fires early, it leaves the plan scheduled. Otherwise it removes itself once it has run.
+**The scheduled task checks again before launching**, since hours may have passed. If the conversation already moved on (you resumed it yourself), it does nothing. If it fires early, it schedules itself again for the reset. Otherwise it removes itself once it has run.
 
 **Following what happened.** Every step (script written, scheduled, launched, skipped, failed) goes to `~/.claude/context-runway/resume-log.jsonl`, and the latest plan per project to `resume/<project>-<hash>.json`. To read them:
 

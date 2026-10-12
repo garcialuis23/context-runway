@@ -13,6 +13,7 @@ const {
   buildScript,
   buildLaunchArgs,
   RESET_GRACE_MS,
+  SETTLE_MS,
 } = require('../../src/lib/resume');
 
 const NOW = 1_800_000_000_000;
@@ -74,10 +75,23 @@ test('sessionMovedOn ignores idle re-samples but notices new tokens', () => {
   const idle = history.concat([{ sessionId: 's1', ts: NOW + 60000, contextTokens: 5000 }]);
   assert.equal(sessionMovedOn(idle, plan), false);
 
-  const resumed = idle.concat([{ sessionId: 's1', ts: NOW + 120000, contextTokens: 7000 }]);
+  const resumed = idle.concat([{ sessionId: 's1', ts: NOW + SETTLE_MS + 60000, contextTokens: 7000 }]);
   assert.equal(sessionMovedOn(resumed, plan), true);
 
   assert.equal(sessionMovedOn(resumed, { ...plan, contextTokens: null }), false);
+});
+
+test("sessionMovedOn lets the cut-off turn's late sample settle first", () => {
+  const plan = { sessionId: 's1', createdAt: NOW, contextTokens: 5000 };
+  // The throttled status line records the turn's final count after the hook...
+  const late = [{ sessionId: 's1', ts: NOW + 30000, contextTokens: 5400 }];
+  assert.equal(sessionMovedOn(late, plan), false);
+  // ...and keeps re-sampling it while idle: still not moved on.
+  const idle = late.concat([{ sessionId: 's1', ts: NOW + SETTLE_MS + 60000, contextTokens: 5400 }]);
+  assert.equal(sessionMovedOn(idle, plan), false);
+  // Real progress after the settle window does count.
+  const resumed = idle.concat([{ sessionId: 's1', ts: NOW + SETTLE_MS + 120000, contextTokens: 6100 }]);
+  assert.equal(sessionMovedOn(resumed, plan), true);
 });
 
 test('quoteArg neutralises shell syntax per platform', () => {
@@ -97,6 +111,11 @@ test('buildScript resumes the session interactively from the project folder', ()
   assert.match(sh, /^#!\/bin\/sh\n/);
   assert.match(sh, /cd '\/work\/app' \|\| exit 1/);
   assert.match(sh, /exec claude --resume 'abc-123' 'Carry on\.'/);
+});
+
+test('buildScript escapes % in a Windows folder name instead of dropping it', () => {
+  const cmd = buildScript({ cwd: 'C:\\work\\100% done', sessionId: 'abc-123', prompt: 'Go.' }, 'win32');
+  assert.match(cmd, /cd \/d "C:\\work\\100%% done"\r\n/);
 });
 
 test('buildLaunchArgs resumes in the background with the configured permission mode', () => {
