@@ -8,7 +8,7 @@ A status bar item + panel that visualizes:
 
 Click the status bar item (or run **Context Runway: Show Usage Panel**) to open the full view.
 
-![VS Code panel with context window and rate-limit charts](../docs/screenshots/panel.png)
+<img src="../docs/screenshots/panel.png" alt="VS Code panel with context window, 5-hour and 7-day charts and a lines-of-code card" width="420">
 
 Requires VS Code >= 1.85 and Node.js >= 18 (to package the `.vsix`).
 

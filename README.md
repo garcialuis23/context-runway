@@ -21,17 +21,13 @@ It's made of two pieces:
 
 ## Screenshots
 
-Status line, right in the terminal:
+The status line, right in the terminal — context left in this chat, 5-hour and 7-day limits (⚠ = on pace to run out before the reset), lines of code, and a recent auto-compaction:
 
-![Status line showing context window and rate-limit usage](docs/screenshots/statusline.png)
+<img src="docs/screenshots/statusline.png" alt="Status line with ctx, 5h, 7d and loc rows and an auto-compaction notice" width="640">
 
-The VS Code panel, with history charts:
+The VS Code panel, with the same data over time:
 
-![VS Code panel with context window and rate-limit charts](docs/screenshots/panel.png)
-
-The `loc` row, showing lines added/removed today and this week:
-
-![Status line showing the loc row with today/week lines added and removed](docs/screenshots/lines.png)
+<img src="docs/screenshots/panel.png" alt="VS Code panel with context window, 5-hour and 7-day charts and a lines-of-code card" width="420">
 
 ## Requirements
 

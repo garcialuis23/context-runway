@@ -9,11 +9,7 @@ A Claude Code status line that shows, at a glance:
 
 The status line reads the JSON Claude Code already sends to status line scripts (`context_window`, `rate_limits`) — no scraping, no extra API calls, no added token cost. The only token cost is the handoff notes themselves: Claude writing them once near a limit, and reading them at the start of the next session.
 
-![Status line showing context window and rate-limit usage](../docs/screenshots/statusline.png)
-
-The `loc` row, showing lines added/removed today and this week:
-
-![Status line showing the loc row with today/week lines added and removed](../docs/screenshots/lines.png)
+<img src="../docs/screenshots/statusline.png" alt="Status line with ctx, 5h, 7d and loc rows and an auto-compaction notice" width="640">
 
 Requires Node.js >= 18.
 
