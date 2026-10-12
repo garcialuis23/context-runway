@@ -10,24 +10,31 @@ function handoffCommands(settings, event) {
   return (settings.hooks[event] || []).flatMap((g) => g.hooks).filter(isHandoffHook).map((h) => h.command);
 }
 
-test('installHandoffHooks adds both hooks to empty settings', () => {
+test('installHandoffHooks adds every hook to empty settings', () => {
   const settings = {};
   installHandoffHooks(settings);
 
   const [prompt] = handoffCommands(settings, 'UserPromptSubmit');
+  const [tool] = handoffCommands(settings, 'PostToolUse');
   const [start] = handoffCommands(settings, 'SessionStart');
+  const [stopfail] = handoffCommands(settings, 'StopFailure');
   assert.match(prompt, /handoff\.js" prompt$/);
+  assert.match(tool, /handoff\.js" tool$/);
   assert.match(start, /handoff\.js" start$/);
+  assert.match(stopfail, /handoff\.js" stopfail$/);
   assert.equal(settings.hooks.SessionStart[0].matcher, 'startup|clear|compact');
+  assert.equal(settings.hooks.StopFailure[0].matcher, 'rate_limit');
   assert.equal(settings.hooks.UserPromptSubmit[0].matcher, undefined);
+  assert.equal(settings.hooks.PostToolUse[0].matcher, undefined);
 });
 
 test('installHandoffHooks is idempotent', () => {
   const settings = {};
   installHandoffHooks(settings);
   installHandoffHooks(settings);
-  assert.equal(handoffCommands(settings, 'UserPromptSubmit').length, 1);
-  assert.equal(handoffCommands(settings, 'SessionStart').length, 1);
+  for (const event of ['UserPromptSubmit', 'PostToolUse', 'SessionStart', 'StopFailure']) {
+    assert.equal(handoffCommands(settings, event).length, 1, event);
+  }
 });
 
 test("installHandoffHooks keeps the user's own hooks", () => {
