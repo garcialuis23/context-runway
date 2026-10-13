@@ -26,6 +26,9 @@ test('installHandoffHooks adds every hook to empty settings', () => {
   assert.equal(settings.hooks.StopFailure[0].matcher, 'rate_limit');
   assert.equal(settings.hooks.UserPromptSubmit[0].matcher, undefined);
   assert.equal(settings.hooks.PostToolUse[0].matcher, undefined);
+  // Long enough for PowerShell to register the scheduled task (it gives up at 20s).
+  assert.equal(settings.hooks.StopFailure[0].hooks[0].timeout, 30);
+  assert.equal(settings.hooks.PostToolUse[0].hooks[0].timeout, 10);
 });
 
 test('installHandoffHooks is idempotent', () => {

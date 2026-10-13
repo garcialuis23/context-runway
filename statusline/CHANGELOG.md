@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+**Re-run `npm run install-statusline` once after updating**, so the `StopFailure` hook gets its longer timeout.
+
+- **`.context-runway.json` must be trusted before it can run Claude unattended.** `resume: "schedule"`, `resumePrompt` and `permissionMode` are ignored until you run `node src/handoff.js trust` in the project, and again whenever the file changes. `status` says what was ignored. If you already use `schedule`, trust your file once after updating.
+- The `StopFailure` hook now has a 30-second timeout instead of 10, enough for PowerShell to register the scheduled task on a cold start. The plan is also saved before scheduling, so a scheduled resume still runs if the hook is cut off.
+
 ## 0.2.0
 
 Handoff notes and resuming after a usage limit. **Re-run `npm run install-statusline` once after updating**: this release registers four Claude Code hooks next to the status line.
