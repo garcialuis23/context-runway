@@ -16,6 +16,9 @@
 //                            limit resets (see lib/resume.js).
 //   node handoff.js run-resume <plan>  — what that scheduled task runs.
 //   node handoff.js status   — prints what was scheduled, launched or skipped.
+//   node handoff.js trust [dir] — trusts the nearest .context-runway.json as it
+//                            reads now, so its unattended settings apply
+//                            (see lib/config.js).
 //
 // The statusline is the only writer of usage-history.jsonl; this script just
 // reads it, so it knows usage as of the last assistant message. Hooks must
@@ -25,7 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const { readHistory, STATE_DIR } = require('./lib/history');
 const { formatDuration } = require('./lib/render');
-const { loadProjectConfig } = require('./lib/config');
+const { loadProjectConfig, trustConfig, CONFIG_FILE } = require('./lib/config');
 const { projectSlug } = require('./lib/project');
 const resume = require('./lib/resume');
 
@@ -277,12 +280,18 @@ function onStopFailure(input, nowMs) {
     scriptPath,
     taskName,
     status: 'script',
+    ...(config.ignored.length > 0 && { ignored: config.ignored, configPath: config.configPath }),
   };
 
   fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
   fs.writeFileSync(scriptPath, resume.buildScript(plan), { mode: 0o755 });
 
   if (config.resume === 'schedule') {
+    // Saved before calling PowerShell: if Claude Code kills the hook while the
+    // task is being registered, the task (if it got registered) still finds
+    // a plan to run, and the script is still there either way.
+    plan.status = 'scheduling';
+    resume.writePlan(planPath, plan);
     if (plan.runAt == null) {
       plan.status = 'schedule-failed';
       plan.error = 'reset time unknown (no rate-limit data from the status line yet)';
@@ -302,6 +311,7 @@ function onStopFailure(input, nowMs) {
     runAt: plan.runAt,
     scriptPath,
     ...(plan.error && { error: plan.error }),
+    ...(plan.ignored && { ignored: plan.ignored, configPath: plan.configPath }),
   });
 }
 
@@ -309,7 +319,9 @@ function onStopFailure(input, nowMs) {
 // passed: the user may have resumed by hand, or the plan may be stale.
 function runResume(planPath, nowMs) {
   const plan = resume.readPlan(planPath);
-  if (!plan || plan.status !== 'scheduled') return;
+  // 'scheduling' means the stopfail hook was cut off right after registering
+  // this task, before it could record that it had.
+  if (!plan || (plan.status !== 'scheduled' && plan.status !== 'scheduling')) return;
 
   const log = (event, extra = {}) =>
     resume.appendLog({ ts: nowMs, event, sessionId: plan.sessionId, cwd: plan.cwd, ...extra });
@@ -352,15 +364,30 @@ const STATUS_HINTS = {
   skipped: (e) => e.reason,
 };
 
+const untrustedHint = (e) =>
+  e.ignored ? `  (ignored ${e.ignored.join(', ')} from untrusted ${e.configPath}; run: node handoff.js trust)` : '';
+
 function formatStatus(entries) {
   if (entries.length === 0) return 'context-runway: no resumes recorded yet.';
   return [
     'context-runway resume log (newest last):',
     ...entries.map((e) => {
-      const hint = STATUS_HINTS[e.event]?.(e) ?? '';
+      const hint = (STATUS_HINTS[e.event]?.(e) ?? '') + untrustedHint(e);
       return `  ${new Date(e.ts).toLocaleString()}  ${e.event.padEnd(15)} ${path.basename(e.cwd || '')}  ${hint}`;
     }),
   ].join('\n');
+}
+
+// Shows the file being trusted, so the user sees exactly what they approve.
+function runTrust(dir) {
+  const result = trustConfig(dir);
+  if (!result) {
+    console.log(`context-runway: no ${CONFIG_FILE} found in ${path.resolve(dir)} or its parent folders.`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Trusted ${result.configPath}:\n\n${result.text.trim()}\n`);
+  console.log('Its resume, resumePrompt and permissionMode now apply. Editing the file means running this again.');
 }
 
 async function main() {
@@ -368,6 +395,10 @@ async function main() {
   // Not hooks: run by hand or by Task Scheduler, with nothing on stdin.
   if (mode === 'status') {
     console.log(formatStatus(resume.readLog().slice(-20)));
+    return;
+  }
+  if (mode === 'trust') {
+    runTrust(process.argv[3] || process.cwd());
     return;
   }
   try {

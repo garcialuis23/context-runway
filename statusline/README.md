@@ -71,9 +71,17 @@ When the 5-hour (or 7-day) limit cuts a session off mid-turn, Claude Code fires 
 }
 ```
 
-- `permissionMode` is what the background session runs with: `acceptEdits` (default), `auto`, `manual`, `dontAsk` or `plan`. `bypassPermissions` is not accepted, since this file can come with a cloned repo. Anything that needs approval waits until you attach and answer.
+- `permissionMode` is what the background session runs with: `acceptEdits` (default), `auto`, `manual`, `dontAsk` or `plan`. `bypassPermissions` is never accepted. Anything that needs approval waits until you attach and answer.
 - `extraInstructions` is added to the request for handoff notes, for project-specific bookkeeping (a work log, a docs folder…).
 - Missing or invalid values fall back to the defaults, so a typo never breaks the hooks.
+
+**Trusting the file.** A `.context-runway.json` can come with a cloned repo, so the settings that make Claude work unattended (`resume: "schedule"`, `resumePrompt`, `permissionMode`) only apply once you trust that file. From the project folder:
+
+```bash
+node <path-to-clone>/statusline/src/handoff.js trust
+```
+
+It prints the file it trusted, so you see exactly what you approved. Trust is recorded by content hash in `~/.claude/context-runway/trusted-configs.json`, so if the file changes (a `git pull`, say), those settings stop applying until you trust it again. Until then they fall back to the defaults, and `handoff.js status` says which ones were ignored. `extraInstructions` and `resume: "off"` apply without trust: the first only reaches a session you're watching, just like the repo's `CLAUDE.md`, and the second only does less.
 
 **The scheduled task checks again before launching**, since hours may have passed. If the conversation already moved on (you resumed it yourself), it does nothing. If it fires early, it schedules itself again for the reset. Otherwise it removes itself once it has run.
 

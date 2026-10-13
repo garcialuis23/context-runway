@@ -2,8 +2,9 @@
 'use strict';
 
 // Wires context-runway into ~/.claude/settings.json as the statusLine
-// command, plus the handoff hooks (see handoff.js). Safe to re-run: it merges into existing settings rather than
-// overwriting the file, and backs up the previous version first.
+// command, plus the handoff hooks (see handoff.js). Safe to re-run: it merges
+// into existing settings rather than overwriting the file, and backs up the
+// previous version first.
 
 const fs = require('fs');
 const os = require('os');
@@ -15,12 +16,16 @@ const HANDOFF_PATH = path.resolve(__dirname, 'handoff.js').split(path.sep).join(
 
 // Hook events used by handoff.js, with the mode argument each one passes.
 // SessionStart skips 'resume' (that conversation is already loaded), and
-// StopFailure only matters when a usage limit ended the turn.
+// StopFailure only matters when a usage limit ended the turn. It also gets a
+// longer timeout: it may register a scheduled task through PowerShell, which
+// can take well over 10 seconds on a cold start (scheduleTask in
+// lib/resume.js gives up after 20).
+const DEFAULT_HOOK_TIMEOUT_S = 10;
 const HANDOFF_HOOKS = [
   { event: 'UserPromptSubmit', mode: 'prompt' },
   { event: 'PostToolUse', mode: 'tool' },
   { event: 'SessionStart', mode: 'start', matcher: 'startup|clear|compact' },
-  { event: 'StopFailure', mode: 'stopfail', matcher: 'rate_limit' },
+  { event: 'StopFailure', mode: 'stopfail', matcher: 'rate_limit', timeout: 30 },
 ];
 
 // Drops any context-runway handoff hooks already in settings (so re-running
@@ -50,8 +55,8 @@ function isHandoffHook(hook) {
 
 function installHandoffHooks(settings) {
   const hooks = withoutHandoffHooks(settings.hooks || {});
-  for (const { event, mode, matcher } of HANDOFF_HOOKS) {
-    const group = { hooks: [{ type: 'command', command: `node "${HANDOFF_PATH}" ${mode}`, timeout: 10 }] };
+  for (const { event, mode, matcher, timeout = DEFAULT_HOOK_TIMEOUT_S } of HANDOFF_HOOKS) {
+    const group = { hooks: [{ type: 'command', command: `node "${HANDOFF_PATH}" ${mode}`, timeout }] };
     if (matcher) group.matcher = matcher;
     hooks[event] = [...(hooks[event] || []), group];
   }
