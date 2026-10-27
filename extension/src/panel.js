@@ -330,6 +330,28 @@ function renderPanelHtml(nonce) {
     container.appendChild(card);
   }
 
+  // A plain stat card (no chart) for values that aren't a bounded 0-100%
+  // quantity like context/rate-limit usage — lines changed can be any size.
+  function renderStatCard(container, opts) {
+    const card = el('div', { class: 'card' });
+    const head = el('div', { class: 'card-head' });
+    const titleWrap = el('div');
+    const title = el('div', { class: 'card-title' });
+    title.textContent = opts.title;
+    titleWrap.appendChild(title);
+    const valueEl = el('span', { class: 'card-value' });
+    valueEl.textContent = opts.value;
+    titleWrap.appendChild(valueEl);
+    head.appendChild(titleWrap);
+    card.appendChild(head);
+    if (opts.subtitle) {
+      const sub = el('div', { class: 'card-sub' });
+      sub.textContent = opts.subtitle;
+      card.appendChild(sub);
+    }
+    container.appendChild(card);
+  }
+
   function renderTable(container, history) {
     const details = el('details');
     const summary = el('summary');
@@ -376,7 +398,7 @@ function renderPanelHtml(nonce) {
     return null;
   }
 
-  function render(history, workspaceDir) {
+  function render(history, workspaceDir, locSummary) {
     app.textContent = '';
 
     if (!history || history.length === 0) {
@@ -512,6 +534,19 @@ function renderPanelHtml(nonce) {
       renderChart(app, sevenDaySeries, { title: '7-day rate limit', subtitle, meta: crossSessionMeta(sevenDayEntry), stale: expired });
     }
 
+    // Lines of code is account-wide across every session on this machine
+    // (not per-chat like context, and not synced across other machines) —
+    // only shown once there's actually something to report, so it doesn't
+    // clutter the panel for users on an older Claude Code that doesn't send
+    // cost data yet.
+    if (locSummary && (locSummary.week.added > 0 || locSummary.week.removed > 0)) {
+      renderStatCard(app, {
+        title: 'Lines of code — this machine',
+        value: '+' + locSummary.today.added + '/-' + locSummary.today.removed + ' today',
+        subtitle: '+' + locSummary.week.added + '/-' + locSummary.week.removed + ' this week',
+      });
+    }
+
     const otherSessions = allSessions.filter((s) => s !== currentSession).slice(0, 5);
     if (otherSessions.length > 0) {
       const otherWrap = el('details');
@@ -532,7 +567,7 @@ function renderPanelHtml(nonce) {
 
   window.addEventListener('message', (event) => {
     const message = event.data;
-    if (message.type === 'history') render(message.history, message.workspaceDir);
+    if (message.type === 'history') render(message.history, message.workspaceDir, message.locSummary);
   });
 })();
 </script>

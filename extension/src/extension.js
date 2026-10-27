@@ -7,6 +7,7 @@ const {
   readHistory,
   mostRecentWithField,
   sessionLabel,
+  summarizeLinesOfCode,
   formatTokenCount,
   formatAgo,
   HISTORY_FILE,
@@ -115,13 +116,19 @@ function refresh() {
   if (fiveHourExpired || sevenDayExpired) {
     tooltipLines.push('⚠ Rate-limit window(s) have reset since the last update — send a message to refresh.');
   }
+
+  const locSummary = summarizeLinesOfCode(history, nowMs);
+  if (locSummary.today.added > 0 || locSummary.today.removed > 0) {
+    tooltipLines.push(`Lines today: +${locSummary.today.added}/-${locSummary.today.removed} (this machine)`);
+  }
+
   tooltipLines.push('Click for context & rate-limit history — Context Runway');
   statusBarItem.tooltip = tooltipLines.join('\n');
 
   statusBarItem.backgroundColor = backgroundForPct(worstPct);
   statusBarItem.show();
 
-  if (panel) panel.webview.postMessage({ type: 'history', history, workspaceDir });
+  if (panel) panel.webview.postMessage({ type: 'history', history, workspaceDir, locSummary });
 }
 
 function showPanel() {

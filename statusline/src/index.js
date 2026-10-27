@@ -3,7 +3,8 @@
 
 const { appendSnapshot } = require('./lib/history');
 const { projectWindow } = require('./lib/projection');
-const { COLORS, formatRow, formatTokenCount, formatDuration } = require('./lib/render');
+const { COLORS, formatRow, formatTokenCount, formatDuration, formatLocRow } = require('./lib/render');
+const { summarizeLinesOfCode } = require('./lib/linesOfCode');
 
 const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
 const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -123,6 +124,10 @@ async function main() {
 
   const effortLevel = input.effort?.level || null;
 
+  const cost = input.cost || {};
+  const linesAdded = typeof cost.total_lines_added === 'number' ? cost.total_lines_added : null;
+  const linesRemoved = typeof cost.total_lines_removed === 'number' ? cost.total_lines_removed : null;
+
   const sessionId = input.session_id || 'unknown';
   const sessionName = input.session_name || null;
   // Falls back to a short id fragment so concurrent sessions in the same
@@ -143,6 +148,8 @@ async function main() {
     fiveHourResetsAt,
     sevenDayPct,
     sevenDayResetsAt,
+    linesAdded,
+    linesRemoved,
   });
 
   const lines = [];
@@ -188,6 +195,12 @@ async function main() {
     renderRateLimitRow('5h', fiveHourPct, fiveHourResetsAt, history, 'fiveHourPct', 'fiveHourResetsAt', now, FIVE_HOUR_MS),
     renderRateLimitRow('7d', sevenDayPct, sevenDayResetsAt, history, 'sevenDayPct', 'sevenDayResetsAt', now, SEVEN_DAY_MS)
   );
+
+  // Only shown once Claude Code actually sends cost data (older versions
+  // don't), so the row doesn't flash "0/0" for everyone on an older CLI.
+  if (linesAdded != null || linesRemoved != null) {
+    rows.push(formatLocRow(summarizeLinesOfCode(history, now)));
+  }
 
   const compaction = detectRecentCompaction(history, sessionId, contextWindowSize, now);
   if (compaction) {

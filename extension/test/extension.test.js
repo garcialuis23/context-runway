@@ -226,6 +226,35 @@ test('activate: tooltip credits the session actually feeding 5h/7d when it diffe
   assert.match(env.mock.statusBarItem.tooltip, /7d from other-repo · #termin, updated/);
 });
 
+test('activate: tooltip shows lines added/removed today when cost data is present', (t) => {
+  const now = Date.now();
+  const env = setup([{ ts: now, sessionId: 's1', contextUsedPct: 10, linesAdded: 128, linesRemoved: 34 }]);
+  t.after(() => env.cleanup());
+
+  assert.match(env.mock.statusBarItem.tooltip, /Lines today: \+128\/-34 \(this machine\)/);
+});
+
+test('activate: tooltip omits the lines-of-code line when there is no cost data', (t) => {
+  const now = Date.now();
+  const env = setup([{ ts: now, sessionId: 's1', contextUsedPct: 10 }]);
+  t.after(() => env.cleanup());
+
+  assert.ok(!env.mock.statusBarItem.tooltip.includes('Lines today'));
+});
+
+test('showPanel: posts a locSummary alongside history', (t) => {
+  const now = Date.now();
+  const env = setup([{ ts: now, sessionId: 's1', contextUsedPct: 10, linesAdded: 50, linesRemoved: 5 }]);
+  t.after(() => env.cleanup());
+
+  const handler = env.mock.registeredCommands.get('context-runway.showPanel');
+  handler();
+
+  const message = env.mock.webviewPanels[0].webview.messages[0];
+  assert.equal(message.locSummary.today.added, 50);
+  assert.equal(message.locSummary.today.removed, 5);
+});
+
 test('clearHistory: confirming wipes the file and shows a confirmation message', async (t) => {
   const env = setup([{ ts: Date.now(), sessionId: 's1', contextUsedPct: 10 }]);
   t.after(() => env.cleanup());

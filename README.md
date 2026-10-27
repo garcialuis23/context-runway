@@ -4,20 +4,31 @@
 [![CodeQL](https://github.com/garcialuis23/context-runway/actions/workflows/codeql.yml/badge.svg)](https://github.com/garcialuis23/context-runway/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Visual tooling to see how much conversation/context "runway" you have left when working with Claude Code — tokens remaining in the current context window, and how close you are to your account's hourly/weekly usage limits.
+Visual tooling to see how much conversation/context "runway" you have left when working with Claude Code — tokens remaining in the current context window, and how close you are to your account's hourly/weekly usage limits — and to not lose your place when you run out.
 
-- [`statusline/`](statusline/) — a Claude Code status line showing context window usage and rate-limit burn-rate projections.
-- [`extension/`](extension/) — a companion VS Code extension with a status bar item and a webview panel with history charts, reading the same data the statusline writes.
+## Features
+
+- **Context runway** — how full the current conversation's context window is, and roughly how many turns are left at your current pace.
+- **Rate limits** — 5-hour and 7-day account usage, when each resets, and a ⚠ warning if you're on pace to hit 100% before the reset.
+- **Lines of code** — lines Claude Code added/removed today and this week, across every session on the machine.
+- **Handoff notes** — when context reaches 80% (just before auto-compaction) or the 5-hour limit reaches 95%, Claude saves notes on where the work stands. The next new session in that project starts with them loaded and picks up where you left off. [How it works](statusline/README.md#handoff-notes).
+- **Resume after a usage limit** — if a limit cuts a session off mid-task, you get a one-click script to reopen it, or, if you opt in per project, it resumes by itself in the background once the limit resets (Windows). [How it works](statusline/README.md#resuming-after-a-usage-limit).
+- **History charts** — the VS Code extension shows all of the above over time.
+
+It's made of two pieces:
+
+- [`statusline/`](statusline/) — a Claude Code status line plus the handoff and resume hooks. This is the core; everything else reads what it records.
+- [`extension/`](extension/) — an optional companion VS Code extension with a status bar item and a webview panel with history charts, reading the same data the statusline writes.
 
 ## Screenshots
 
-Status line, right in the terminal:
+The status line, right in the terminal — context left in this chat, 5-hour and 7-day limits (⚠ = on pace to run out before the reset), lines of code, and a recent auto-compaction:
 
-![Status line showing context window and rate-limit usage](docs/screenshots/statusline.png)
+<img src="docs/screenshots/statusline.png" alt="Status line with ctx, 5h, 7d and loc rows and an auto-compaction notice" width="640">
 
-The VS Code panel, with history charts:
+The VS Code panel, with the same data over time:
 
-![VS Code panel with context window and rate-limit charts](docs/screenshots/panel.png)
+<img src="docs/screenshots/panel.png" alt="VS Code panel with context window, 5-hour and 7-day charts and a lines-of-code card" width="420">
 
 ## Requirements
 
@@ -35,6 +46,8 @@ cd context-runway/statusline
 npm run install-statusline
 ```
 
+This sets up both the status line and the handoff hooks in `~/.claude/settings.json` (backing it up first). Start a new Claude Code session to see it.
+
 Then, for the richer VS Code view:
 
 ```bash
@@ -44,6 +57,30 @@ code --install-extension context-runway-0.1.0.vsix
 ```
 
 See [`statusline/README.md`](statusline/README.md) and [`extension/README.md`](extension/README.md) for details.
+
+## Updating
+
+Neither piece auto-updates, and nothing is synced between machines — usage history and handoff notes stay on the machine that wrote them. If you have this installed on more than one machine, repeat these steps on **each one** after pulling a new version:
+
+```bash
+git pull
+```
+
+- **statusline**: usually that's it. `~/.claude/settings.json` points straight at the scripts in your clone, so the next Claude Code session picks up code changes automatically. Re-run `npm run install-statusline` only when an update adds a new setting — as statusline 0.2.0 did (it registers the handoff and resume hooks), so run it once on each machine after pulling it. Each [changelog](statusline/CHANGELOG.md) entry says when a reinstall is needed:
+
+  ```bash
+  cd statusline
+  npm run install-statusline
+  ```
+
+  Then start a new Claude Code session; sessions that were already open keep their old settings.
+- **extension**: the VS Code extension is an installed `.vsix`, not read live from the repo, so a `git pull` alone does nothing for it. Rebuild and reinstall:
+
+  ```bash
+  cd extension
+  npm run package
+  code --install-extension context-runway-*.vsix --force
+  ```
 
 ## Contributing
 

@@ -10,7 +10,8 @@ it directly. All changes go through a pull request from a fork:
 
 1. Fork the repo and create a branch off `main`.
 2. Make your change.
-3. Run the tests (`cd statusline && npm test`).
+3. Run the tests (`cd statusline && npm test`, and `cd extension && npm test`
+   if you touched the extension). CI runs both on Windows, macOS and Linux.
 4. Open a pull request. CI (tests + CodeQL) must pass and a maintainer must
    approve before it can be merged.
 

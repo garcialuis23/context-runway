@@ -61,4 +61,29 @@ function formatRow(label, pct, extra, warn) {
   return `${COLORS.dim}${labelStr}${COLORS.reset}${renderBar(pct)} ${COLORS.bold}${pctStr}${COLORS.reset}  ${COLORS.dim}${extra || ''}${COLORS.reset}${warnStr}`;
 }
 
-module.exports = { COLORS, colorForPct, renderBar, formatRow, formatTokenCount, formatDuration };
+// Renders a compact "+123/-45" line-change delta, colored green/red so
+// added/removed read at a glance without needing to parse the sign.
+function formatLineDelta(added, removed) {
+  return `${COLORS.green}+${formatTokenCount(added)}${COLORS.reset}/${COLORS.red}-${formatTokenCount(removed)}${COLORS.reset}`;
+}
+
+// One "loc  today +N/-M  ·  week +N/-M" row, mirroring formatRow's
+// dim-label style but without a percentage bar (lines changed isn't a
+// bounded 0-100% quantity like context/rate-limit usage).
+function formatLocRow(summary) {
+  const labelStr = 'loc'.padEnd(4);
+  const today = formatLineDelta(summary.today.added, summary.today.removed);
+  const week = formatLineDelta(summary.week.added, summary.week.removed);
+  return `${COLORS.dim}${labelStr}${COLORS.reset}today ${today}  ${COLORS.dim}·${COLORS.reset}  week ${week}`;
+}
+
+module.exports = {
+  COLORS,
+  colorForPct,
+  renderBar,
+  formatRow,
+  formatTokenCount,
+  formatDuration,
+  formatLineDelta,
+  formatLocRow,
+};

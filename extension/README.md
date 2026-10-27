@@ -4,10 +4,11 @@ A status bar item + panel that visualizes:
 
 - **Context window runway** for the current Claude Code session (line chart of context % used over the session).
 - **5-hour and 7-day rate-limit usage**, each as its own chart, with time-to-reset.
+- **Lines of code added/removed today and this week**, across every session on this machine (shown in the status bar tooltip and as a panel card once Claude Code starts sending cost data).
 
 Click the status bar item (or run **Context Runway: Show Usage Panel**) to open the full view.
 
-![VS Code panel with context window and rate-limit charts](../docs/screenshots/panel.png)
+<img src="../docs/screenshots/panel.png" alt="VS Code panel with context window, 5-hour and 7-day charts and a lines-of-code card" width="420">
 
 Requires VS Code >= 1.85 and Node.js >= 18 (to package the `.vsix`).
 
@@ -41,6 +42,18 @@ Or package a local `.vsix` to install manually:
 npm run package
 code --install-extension context-runway-0.1.0.vsix
 ```
+
+## Updating
+
+Unlike the statusline, this is an installed `.vsix`, not read live from the repo — a `git pull` alone changes nothing until you rebuild and reinstall:
+
+```bash
+git pull
+npm run package
+code --install-extension context-runway-*.vsix --force
+```
+
+If you have it installed on multiple machines, repeat this on each one — nothing syncs automatically.
 
 ## Telemetry
 

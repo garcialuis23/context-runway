@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
-// Removes the context-runway statusLine entry from ~/.claude/settings.json,
-// leaving everything else untouched. No-op if it isn't installed.
+// Removes the context-runway statusLine entry and handoff hooks from
+// ~/.claude/settings.json, leaving everything else untouched. No-op if
+// neither is installed.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { withoutHandoffHooks } = require('./install');
 
 const SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
@@ -20,15 +22,22 @@ function main() {
   }
 
   const isOurs = settings.statusLine?.type === 'command' && settings.statusLine?.command?.includes('context-runway');
+  if (isOurs) delete settings.statusLine;
 
-  if (!isOurs) {
-    console.log('context-runway is not the configured statusLine, leaving settings untouched.');
+  const hooksBefore = JSON.stringify(settings.hooks || {});
+  const hooks = withoutHandoffHooks(settings.hooks || {});
+  const hadHooks = JSON.stringify(hooks) !== hooksBefore;
+  if (Object.keys(hooks).length > 0) settings.hooks = hooks;
+  else delete settings.hooks;
+
+  if (!isOurs && !hadHooks) {
+    console.log('context-runway is not installed, leaving settings untouched.');
     return;
   }
 
-  delete settings.statusLine;
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n');
-  console.log(`Removed statusLine entry from ${SETTINGS_PATH}`);
+  if (isOurs) console.log(`Removed statusLine entry from ${SETTINGS_PATH}`);
+  if (hadHooks) console.log(`Removed handoff hooks from ${SETTINGS_PATH}`);
 }
 
 main();
